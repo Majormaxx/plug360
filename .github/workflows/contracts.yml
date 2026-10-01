@@ -1,0 +1,55 @@
+name: contracts
+
+on:
+  push:
+    branches: [main]
+    paths: ["contracts/**", ".github/workflows/contracts.yml"]
+  pull_request:
+    paths: ["contracts/**", ".github/workflows/contracts.yml"]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: contracts
+
+jobs:
+  unit:
+    name: build, format, unit and fuzz tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.7.1
+      - run: forge fmt --check
+      - run: forge build --sizes
+      - run: make test-ci
+
+  arc:
+    name: Arc behavior on testnet fork
+    runs-on: ubuntu-latest
+    env:
+      ARC_FOUNDRY_VERSION: v0.8.0-2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install Arc Foundry
+        working-directory: ${{ runner.temp }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          asset="arc-foundry-${ARC_FOUNDRY_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          gh release download "$ARC_FOUNDRY_VERSION" -R circlefin/arc-foundry -p "$asset" -p "$asset.sha256"
+          sha256sum -c "$asset.sha256"
+          tar -xzf "$asset"
+          mkdir -p "$HOME/.local/bin"
+          mv forge "$HOME/.local/bin/arc-forge"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: arc-forge --version
+      - name: Arc tests (retried once; they depend on the public testnet RPC)
+        run: make test-arc || (sleep 15 && make test-arc)

@@ -1,0 +1,40 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc_version = "0.8.30"
+evm_version = "osaka" # Arc's EVM baseline
+optimizer = true
+optimizer_runs = 10_000
+via_ir = false
+bytecode_hash = "none"
+cbor_metadata = false
+# Unit tests run on the standard EVM; Arc behavior tests need arc-forge on an Arc testnet fork.
+# Use the Makefile targets: `make test` and `make test-arc`.
+
+remappings = [
+  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+  "forge-std/=lib/forge-std/src/",
+]
+
+[profile.default.fuzz]
+runs = 1_000
+
+[profile.default.invariant]
+runs = 256
+depth = 64
+
+[profile.ci.fuzz]
+runs = 10_000
+
+[profile.ci.invariant]
+runs = 10_000
+depth = 64
+
+[fmt]
+line_length = 120
+sort_imports = true
+
+[rpc_endpoints]
+arc_mainnet = "https://rpc.mainnet.arc.io"
+arc_testnet = "https://rpc.testnet.arc.io"
