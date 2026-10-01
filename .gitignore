@@ -1,0 +1,12 @@
+.env*
+!.env.example
+node_modules/
+.next/
+out/
+cache/
+broadcast/
+coverage/
+lcov.info
+.vercel/
+.DS_Store
+*.log
