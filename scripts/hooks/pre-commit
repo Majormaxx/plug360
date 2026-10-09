@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Fast gate on every commit: formatting and a clean build of the contracts.
+set -euo pipefail
+export PATH="$HOME/.local/bin:$HOME/.foundry/bin:$PATH"
+root=$(git rev-parse --show-toplevel)
+if git diff --cached --name-only | grep -q '^contracts/'; then
+  cd "$root/contracts"
+  forge fmt --check
+  forge build --quiet
+fi

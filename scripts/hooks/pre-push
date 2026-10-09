@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Full gate on every push (stands in for CI while GitHub Actions is unavailable):
+# unit, fuzz and invariant tests, Slither with no medium or high findings, and the Arc fork tests.
+# PLUG360_SKIP_ARC=1 skips only the Arc fork tests (they need the public testnet RPC).
+set -euo pipefail
+export PATH="$HOME/.local/bin:$HOME/.foundry/bin:$PATH"
+root=$(git rev-parse --show-toplevel)
+cd "$root/contracts"
+log="$root/contracts/cache/last-push-gate.log"
+mkdir -p cache
+{
+  echo "== $(date -u +%FT%TZ) push gate"
+  forge fmt --check
+  make test
+  slither . --filter-paths 'lib|test' --exclude-dependencies --fail-medium
+  if [ "${PLUG360_SKIP_ARC:-0}" != 1 ]; then
+    make test-arc || (sleep 10 && make test-arc)
+  fi
+  echo "== push gate passed"
+} 2>&1 | tee "$log"
+exit "${PIPESTATUS[0]}"

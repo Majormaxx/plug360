@@ -9,6 +9,7 @@ optimizer_runs = 10_000
 via_ir = false
 bytecode_hash = "none"
 cbor_metadata = false
+fs_permissions = [{ access = "read-write", path = "./cache/invariant-stats.csv" }]
 # Unit tests run on the standard EVM; Arc behavior tests need arc-forge on an Arc testnet fork.
 # Use the Makefile targets: `make test` and `make test-arc`.
 
@@ -22,14 +23,18 @@ runs = 1_000
 
 [profile.default.invariant]
 runs = 256
-depth = 64
+depth = 128
 
 [profile.ci.fuzz]
 runs = 10_000
 
 [profile.ci.invariant]
 runs = 10_000
-depth = 64
+depth = 128
+
+[lint]
+# Deal windows are counted in days; a validator shifting block.timestamp by seconds changes no outcome.
+exclude_lints = ["block-timestamp"]
 
 [fmt]
 line_length = 120
