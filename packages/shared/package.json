@@ -1,0 +1,34 @@
+{
+  "name": "@plug360/shared",
+  "version": "0.1.0",
+  "description": "DealEscrow ABI, Arc chain definitions, EIP-712 helpers and fee rules shared by every Plug360 off-chain component",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "@plug360/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "gen:abi": "node scripts/gen-abi.mjs",
+    "check:abi": "node scripts/gen-abi.mjs --check",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "viem": "^2.57.4"
+  },
+  "devDependencies": {
+    "@plug360/testkit": "workspace:*",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

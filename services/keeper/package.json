@@ -1,0 +1,38 @@
+{
+  "name": "@plug360/keeper",
+  "version": "0.1.0",
+  "description": "Permissionless keeper for DealEscrow: finalizes expired disputes, retries parked payouts and raises alerts",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "plug360-keeper": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "@plug360/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "start": "node dist/cli.js run",
+    "once": "node dist/cli.js run --once"
+  },
+  "dependencies": {
+    "@plug360/shared": "workspace:*",
+    "viem": "^2.57.4"
+  },
+  "devDependencies": {
+    "@plug360/testkit": "workspace:*",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

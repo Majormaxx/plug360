@@ -9,7 +9,10 @@ optimizer_runs = 10_000
 via_ir = false
 bytecode_hash = "none"
 cbor_metadata = false
-fs_permissions = [{ access = "read-write", path = "./cache/invariant-stats.csv" }]
+fs_permissions = [
+  { access = "read-write", path = "./cache/invariant-stats.csv" },
+  { access = "read-write", path = "./deployments" },
+]
 # Unit tests run on the standard EVM; Arc behavior tests need arc-forge on an Arc testnet fork.
 # Use the Makefile targets: `make test` and `make test-arc`.
 
