@@ -82,7 +82,7 @@ Pausing blocks new deals only. It never stops a refund, release, ruling, withdra
 | A plug rules dishonestly | Set the plug's level to 0. That blocks new deals; existing deals keep their plug, by design. Publish the ruling history |
 | Owner key lost or compromised | The owner cannot move deal funds. Pause if possible, transfer ownership to a fresh Safe, and alert on any `PlugLevelSet` you did not make. A compromised owner could list a colluding plug for new deals, so warn users to check the plug before paying |
 | Keeper down | Nothing is at risk. Exits are permissionless; anyone can run `finalizeExpiredDispute` or `retryPayout`. Restart the keeper; it resumes from its cursor |
-| RPC outage | Switch the app and keeper to a fallback RPC (Alchemy, Blockdaemon, dRPC or QuickNode list Arc endpoints). Users can still exit through any working RPC |
+| RPC outage or rate limit | The public endpoints rate-limit heavy use (HTTP 429, error -32005). Point the app and keeper at a fallback: `rpc.drpc.testnet.arc.io` or `rpc.blockdaemon.testnet.arc.io` on testnet, `rpc.drpc.mainnet.arc.io`, `rpc.blockdaemon.mainnet.arc.io` or a keyed Alchemy or QuickNode URL on mainnet. The keeper retries -32005 and switches to `RPC_FALLBACK_URL` on its own. Users can still exit through any working RPC |
 | Phishing site | Announce the one real domain and contract address. The contract only pays addresses fixed at funding, so a fake site cannot redirect existing deals |
 
 ## Limits to watch

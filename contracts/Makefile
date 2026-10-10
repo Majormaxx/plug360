@@ -1,4 +1,5 @@
 # Unit tests: standard EVM. Arc tests: arc-forge against an Arc testnet fork (real USDC system contract).
+# Override when the public endpoint rate-limits: make test-arc ARC_RPC=https://rpc.drpc.testnet.arc.io
 ARC_RPC ?= https://rpc.testnet.arc.io
 
 .PHONY: build test test-ci test-arc fmt fmt-check coverage slither mutate invariant-stats hooks rehearse deploy verify list-plug proofs proof-table
