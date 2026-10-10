@@ -18,7 +18,13 @@ for _ in $(seq 1 45); do cast chain-id --rpc-url "$RPC" >/dev/null 2>&1 && break
 echo "fork ready: chain $(cast chain-id --rpc-url "$RPC") block $(cast block-number --rpc-url "$RPC")"
 
 key() { cast wallet new --json | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["private_key"])'; }
-fund() { cast rpc anvil_setBalance "$(cast wallet address "$1")" 0x3635C9ADC5DEA00000 --rpc-url "$RPC" >/dev/null; }
+fund() {
+  for _ in 1 2 3 4 5; do
+    cast rpc anvil_setBalance "$(cast wallet address "$1")" 0x3635C9ADC5DEA00000 --rpc-url "$RPC" >/dev/null 2>&1 && return 0
+    sleep 5
+  done
+  echo "could not fund $(cast wallet address "$1") on the fork"; return 1
+}
 DEPLOYER=$(key); OWNER_KEY=$(key); SELLER=$(key); PLUG=$(key); BUYER=$(key)
 for k in "$DEPLOYER" "$OWNER_KEY" "$SELLER" "$PLUG" "$BUYER"; do fund "$k"; done
 
