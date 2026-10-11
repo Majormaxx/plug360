@@ -32,7 +32,8 @@ Arc runs Osaka with its own precompiles, so scripts run under Arc Foundry (`arc-
 
 1. Gate: `make test`, `make test-arc`, `make slither`, `make mutate` all green.
 2. Rehearse on a fork of the target network: `make rehearse`. It deploys, lists a plug and runs every money path against a local fork with real Arc behavior, then checks the escrow ends at zero.
-3. Fund the deployer, keeper and proof wallets. Testnet: faucet.circle.com. Mainnet: withdraw USDC on the Arc network from an exchange that supports it.
+3. Fund the wallets. A full mainnet run fits in about 2 USDC, because only gas is consumed: the whole deploy and proof sequence uses about 6.2 million gas (about 0.13 USDC at Arc's 20 gwei base fee), and the proof deals recycle one deal's worth of USDC between your own wallets (measured on testnet with a buyer holding 1.15 USDC). Send everything to the deployer, then `FUND_OWNER=0.05 FUND_PLUG=0.05 FUND_SELLER=0.15 FUND_KEEPER=0.3 FUND_BUYER=1.2 script/fund-roles.sh <env-file>`.
+   Testnet: faucet.circle.com. Mainnet: withdraw USDC on the Arc network from an exchange that supports it.
 4. Deploy: `make deploy NETWORK=testnet` (mainnet: `make deploy NETWORK=mainnet CONFIRM=mainnet`). This writes `deployments/<chainId>.json` with the address, owner and deploy block. Commit that file.
 5. Verify the source on Sourcify: `make verify NETWORK=...`. The mainnet explorer API sits behind a Cloudflare challenge, so Sourcify is the verification route.
 6. List the first plug: `make list-plug NETWORK=... PLUG=0x... LEVEL=1`.

@@ -10,8 +10,11 @@ import {IDealEscrowTypes} from "../src/interfaces/IDealEscrowTypes.sol";
 /// @notice Runs every money path once with real transactions and writes deployments/<chainId>-proofs.json:
 ///         canary (1 USDC, seller refund), P1 seller refund, P2 plug rules for the buyer, P3 plug rejects and
 ///         the seller withdraws, P4 signed early release relayed by a third party, P5 zero-length window.
-///         Env: ESCROW, SELLER_KEY, PLUG_KEY, BUYER_KEY, optional RELAYER_KEY (defaults to the seller) and
-///         PROOF_SALT. The plug must already be listed at level 1 or higher.
+///         Env: ESCROW, SELLER_KEY, PLUG_KEY, BUYER_KEY, optional RELAYER_KEY (defaults to the seller),
+///         PROOF_SALT, PROOF_PRICE (default 1 USDC) and PROOF_FEE (default 2% of the price, rounded to an even
+///         amount). The plug must already be listed at level 1 or higher.
+///         Capital: the seller sends what each paid-out deal brought in back to the buyer, so the buyer only ever
+///         needs one deal's worth (price + fee / 2) plus gas. With the defaults that is about 1.05 USDC.
 contract Proofs is Script {
     DealEscrow internal escrow;
     IERC20 internal usdc;
@@ -23,6 +26,8 @@ contract Proofs is Script {
     address internal plug;
     address internal buyer;
     bytes32 internal salt;
+    uint256 internal price;
+    uint256 internal fee;
 
     string internal constant OUT = "proofs";
 
@@ -38,32 +43,37 @@ contract Proofs is Script {
         buyer = vm.addr(buyerKey);
         salt = bytes32(vm.envOr("PROOF_SALT", block.timestamp));
 
-        require(escrow.plugLevel(plug) >= 1, "plug not listed");
-        require(!escrow.paused(), "escrow paused");
-        // canary 1 + five paths x 2.05 = 11.25 USDC pulled in total; refunds come back between paths
-        require(usdc.balanceOf(buyer) >= 12e6, "buyer needs at least 12 USDC");
+        price = vm.envOr("PROOF_PRICE", uint256(1e6));
+        fee = vm.envOr("PROOF_FEE", (price * 200 / 10_000) & ~uint256(1));
+        uint256 perDeal = price + fee / 2;
 
+        require(escrow.plugLevel(plug) >= 1, "plug not listed");
+        require(price <= escrow.levelCap(escrow.plugLevel(plug)), "price over the plug's cap");
+        require(!escrow.paused(), "escrow paused");
+        require(usdc.balanceOf(buyer) >= perDeal, "buyer needs one deal's worth of USDC");
+
+        // canary (1 USDC, no fee) plus five paths; allowance is consumed as deals are funded
         vm.broadcast(buyerKey);
-        usdc.approve(address(escrow), 12e6);
+        usdc.approve(address(escrow), 1e6 + 5 * perDeal);
 
         uint256 canary = _pay("canary", 1e6, 0, 1 days);
         vm.broadcast(sellerKey);
         escrow.refund(canary);
         _expect(canary, IDealEscrowTypes.Status.Refunded);
 
-        uint256 p1 = _pay("P1", 2e6, 100_000, 1 days);
+        uint256 p1 = _pay("P1", price, fee, 1 days);
         vm.broadcast(sellerKey);
         escrow.refund(p1);
         _expect(p1, IDealEscrowTypes.Status.Refunded);
 
-        uint256 p2 = _pay("P2", 2e6, 100_000, 1 days);
+        uint256 p2 = _pay("P2", price, fee, 1 days);
         vm.broadcast(buyerKey);
         escrow.openDispute(p2, keccak256("proof: item not delivered"));
         vm.broadcast(plugKey);
         escrow.plugRefund(p2, keccak256("proof: refund"));
         _expect(p2, IDealEscrowTypes.Status.Refunded);
 
-        uint256 p3 = _pay("P3", 2e6, 100_000, 1 days);
+        uint256 p3 = _pay("P3", price, fee, 1 days);
         vm.broadcast(buyerKey);
         escrow.openDispute(p3, keccak256("proof: disputed"));
         vm.broadcast(plugKey);
@@ -71,8 +81,9 @@ contract Proofs is Script {
         vm.broadcast(sellerKey);
         escrow.withdraw(p3);
         _expect(p3, IDealEscrowTypes.Status.Settled);
+        _recycle();
 
-        uint256 p4 = _pay("P4", 2e6, 100_000, 1 days);
+        uint256 p4 = _pay("P4", price, fee, 1 days);
         IDealEscrowTypes.Deal memory d4 = escrow.getDeal(p4);
         uint256 deadline = d4.releaseAt;
         bytes32 digest =
@@ -83,11 +94,13 @@ contract Proofs is Script {
         vm.broadcast(sellerKey);
         escrow.withdraw(p4);
         _expect(p4, IDealEscrowTypes.Status.Settled);
+        _recycle();
 
-        uint256 p5 = _pay("P5", 2e6, 100_000, 0);
+        uint256 p5 = _pay("P5", price, fee, 0);
         vm.broadcast(buyerKey);
         escrow.withdraw(p5);
         _expect(p5, IDealEscrowTypes.Status.Settled);
+        _recycle();
 
         string memory json = vm.serializeAddress(OUT, "escrow", address(escrow));
         json = vm.serializeUint(OUT, "chainId", block.chainid);
@@ -114,6 +127,12 @@ contract Proofs is Script {
         id = escrow.pay(t, sellerSig, plugSig, buyer);
         vm.serializeUint(OUT, label, id);
         console.log(label, "deal", id);
+    }
+
+    /// @dev Returns the seller's payout to the buyer so the next path can reuse the same capital.
+    function _recycle() internal {
+        vm.broadcast(sellerKey);
+        usdc.transfer(buyer, price - (fee - fee / 2));
     }
 
     function _expect(uint256 id, IDealEscrowTypes.Status want) internal view {

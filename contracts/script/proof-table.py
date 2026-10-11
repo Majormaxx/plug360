@@ -18,6 +18,7 @@ STEPS = {
     "plugReject": "plug rejects the dispute",
     "withdraw": "payout",
     "releaseWithSig": "signed release, relayed",
+    "transfer": "seller returns the payout (capital reuse)",
 }
 ORDER = ["canary", "P1", "P2", "P3", "P4", "P5"]
 
