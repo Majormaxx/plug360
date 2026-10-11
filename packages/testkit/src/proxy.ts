@@ -5,6 +5,9 @@ type JsonRpcRequest = { jsonrpc: '2.0'; id: number | string | null; method: stri
 export type ArcProxyOptions = {
   /** Largest eth_getLogs range accepted, in blocks (inclusive). Arc's limit is 10,000. */
   maxLogBlocks?: number;
+  /** Error returned for an oversized range. Defaults to Arc's -32012. Hosted providers use their own codes and
+   *  messages (dRPC's free plan returns code 35 and a message naming a 10,000-block limit it does not apply). */
+  logRangeError?: { code: number; message: string };
 };
 
 export type ArcProxy = {
@@ -60,7 +63,10 @@ export async function startArcProxy(upstream: string, options: ArcProxyOptions =
           return {
             jsonrpc: '2.0',
             id: call.id,
-            error: { code: -32614, message: `eth_getLogs is limited to a ${maxLogBlocks} block range` },
+            error: options.logRangeError ?? {
+              code: -32012,
+              message: `requested range too large: eth_getLogs is limited to ${maxLogBlocks} blocks`,
+            },
           };
         }
         logRanges.push({ from, to });

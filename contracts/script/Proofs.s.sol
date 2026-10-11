@@ -40,10 +40,11 @@ contract Proofs is Script {
 
         require(escrow.plugLevel(plug) >= 1, "plug not listed");
         require(!escrow.paused(), "escrow paused");
-        require(usdc.balanceOf(buyer) >= 20e6, "buyer needs at least 20 USDC");
+        // canary 1 + five paths x 2.05 = 11.25 USDC pulled in total; refunds come back between paths
+        require(usdc.balanceOf(buyer) >= 12e6, "buyer needs at least 12 USDC");
 
         vm.broadcast(buyerKey);
-        usdc.approve(address(escrow), 20e6);
+        usdc.approve(address(escrow), 12e6);
 
         uint256 canary = _pay("canary", 1e6, 0, 1 days);
         vm.broadcast(sellerKey);

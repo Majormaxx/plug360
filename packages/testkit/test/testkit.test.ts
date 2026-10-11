@@ -44,7 +44,7 @@ describe('testkit', () => {
 
   it('proxy rejects eth_getLogs over 10,000 blocks and records accepted ranges', async () => {
     const tooWide = await rpc(proxy.url, 'eth_getLogs', [{ fromBlock: '0x0', toBlock: '0x2710' }]);
-    expect(tooWide.body?.error?.code).toBe(-32614);
+    expect(tooWide.body?.error?.code).toBe(-32012);
     const ok = await rpc(proxy.url, 'eth_getLogs', [{ fromBlock: '0x0', toBlock: '0x270f' }]);
     expect(ok.body?.result).toEqual(expect.any(Array));
     expect(proxy.logRanges.at(-1)).toEqual({ from: 0n, to: 9999n });

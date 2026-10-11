@@ -5,6 +5,8 @@ import { keccak256 } from 'viem';
 import { DealStatus, MAX_LOG_BLOCKS } from '@plug360/shared';
 import { startArcProxy, type Anvil, type ArcProxy, type Fixture } from '@plug360/testkit';
 import { createKeeper, FileStateStore, memoryLogger, type KeeperConfig, type KeeperState } from '../src/index.js';
+import { isRangeLimit } from '../src/rpc.js';
+import { BaseError, RpcRequestError } from 'viem';
 import { fundDeal, keeperConfig, setup, tempStateFile, write } from './helpers.js';
 
 let anvil: Anvil;
@@ -100,6 +102,68 @@ describe('indexing', () => {
     const report = await k.tick();
     expect(report.ok).toBe(false);
     expect(report.error).toMatch(/RPC is on chain 5042/);
+  });
+});
+
+describe('provider log-range limits', () => {
+  // dRPC's free plan refuses ranges of a few hundred blocks with code 35 and a message naming a 10,000-block
+  // limit it does not apply. Found on the first live testnet run.
+  const drpcError = { code: 35, message: 'ranges over 10000 blocks are not supported on free plan' };
+
+  it('shrinks the range until a strict provider accepts it, without gaps', async () => {
+    const strict = await startArcProxy(anvil.rpcUrl, { maxLogBlocks: 400, logRangeError: drpcError });
+    try {
+      const dealA = await fundDeal(fx);
+      const head = await fx.publicClient.getBlockNumber({ cacheTime: 0 });
+      const stateFile = tempStateFile();
+      const from = fx.deployBlock > 2_000n ? fx.deployBlock - 2_000n : 0n;
+      const { k, logger } = keeper({ rpcUrl: strict.url, stateFile, deployBlock: from });
+      const report = await k.tick();
+      expect(report.ok).toBe(true);
+
+      const ranges = strict.logRanges;
+      expect(ranges.length).toBeGreaterThan(1);
+      expect(ranges[0]!.from).toBe(from);
+      expect(ranges.at(-1)!.to).toBe(head);
+      for (let i = 0; i < ranges.length; i++) {
+        expect(ranges[i]!.to - ranges[i]!.from + 1n).toBeLessThanOrEqual(400n);
+        if (i > 0) expect(ranges[i]!.from).toBe(ranges[i - 1]!.to + 1n);
+      }
+      expect(logger.entries.some((e) => e.outcome === 'range-shrunk')).toBe(true);
+      expect((await readState(stateFile)).deals[dealA.toString()]?.status).toBe(DealStatus.Held);
+    } finally {
+      await strict.stop();
+    }
+  });
+
+  it('switches to a fallback that accepts wider ranges before shrinking', async () => {
+    const strict = await startArcProxy(anvil.rpcUrl, { maxLogBlocks: 400, logRangeError: drpcError });
+    const wide = await startArcProxy(anvil.rpcUrl);
+    try {
+      const stateFile = tempStateFile();
+      const from = fx.deployBlock > 5_000n ? fx.deployBlock - 5_000n : 0n;
+      const { k, logger } = keeper({ rpcUrl: strict.url, rpcFallbackUrl: wide.url, stateFile, deployBlock: from });
+      expect((await k.tick()).ok).toBe(true);
+      expect(strict.logRanges.length).toBe(0); // refused calls are never forwarded
+      expect(wide.logRanges.length).toBeLessThanOrEqual(2);
+      expect(logger.entries.some((e) => e.reason === 'range-limit' && e.outcome === 'switched')).toBe(true);
+      expect(logger.entries.some((e) => e.outcome === 'range-shrunk')).toBe(false);
+    } finally {
+      await strict.stop();
+      await wide.stop();
+    }
+  });
+
+  it('classifies range refusals and nothing else as range limits', () => {
+    const rpcErr = (code: number, message: string) =>
+      new RpcRequestError({ body: {}, url: 'http://x', error: { code, message } });
+    expect(isRangeLimit(rpcErr(-32012, 'requested range too large'))).toBe(true);
+    expect(isRangeLimit(rpcErr(35, drpcError.message))).toBe(true);
+    expect(isRangeLimit(rpcErr(-32602, 'query exceeds max block range 2000'))).toBe(true);
+    expect(isRangeLimit(rpcErr(-32005, 'rate limit exceeded'))).toBe(false);
+    expect(isRangeLimit(rpcErr(-32000, 'execution reverted'))).toBe(false);
+    expect(isRangeLimit(new BaseError('unrelated'))).toBe(false);
+    expect(isRangeLimit(new Error('plain'))).toBe(false);
   });
 });
 

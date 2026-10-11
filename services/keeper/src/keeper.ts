@@ -4,7 +4,7 @@ import { arcChainById, dealEscrowAbi, DealStatus, MAX_LOG_BLOCKS, PLUG_WINDOW_SE
 import { AlertSink, type Alert, type FetchLike } from './alerts.js';
 import type { KeeperConfig } from './config.js';
 import { jsonLogger, type Logger } from './log.js';
-import { RpcPool, type RpcPoolOptions } from './rpc.js';
+import { isRangeLimit, RpcPool, type RpcPoolOptions } from './rpc.js';
 import { TxSender, type ActionResult } from './sender.js';
 import { FileStateStore, loadOrInit, pendingKey, type KeeperState, type StateStore } from './state.js';
 
@@ -128,11 +128,31 @@ export function createKeeper(config: KeeperConfig, deps: KeeperDeps = {}) {
     // 1. Index escrow events in ranges Arc accepts. The cursor and every touched deal are saved per range.
     const startCursor = BigInt(state.cursor);
     report.scannedFrom = startCursor.toString();
+    // The span starts at Arc's limit and halves whenever a provider refuses the range (after one switch to the
+    // other endpoint), then grows back after a run of accepted ranges.
+    const maxSpan = BigInt(MAX_LOG_BLOCKS);
+    let span = maxSpan;
+    let accepted = 0;
     for (let from = startCursor; from <= head; ) {
-      const to = from + BigInt(MAX_LOG_BLOCKS) - 1n < head ? from + BigInt(MAX_LOG_BLOCKS) - 1n : head;
-      const events = await pool.call('getLogs', (c) =>
-        c.getContractEvents({ address: escrow, abi: dealEscrowAbi, fromBlock: from, toBlock: to }),
-      );
+      const to = from + span - 1n < head ? from + span - 1n : head;
+      let events;
+      try {
+        events = await pool.call('getLogs', (c) =>
+          c.getContractEvents({ address: escrow, abi: dealEscrowAbi, fromBlock: from, toBlock: to }),
+        );
+      } catch (err) {
+        if (!isRangeLimit(err)) throw err;
+        if (pool.switchForRange()) continue;
+        if (span <= 1n) throw err;
+        span = span / 2n;
+        accepted = 0;
+        logger({ level: 'warn', job: 'index', outcome: 'range-shrunk', from, span });
+        continue;
+      }
+      if (++accepted >= 8 && span < maxSpan) {
+        span = span * 2n > maxSpan ? maxSpan : span * 2n;
+        accepted = 0;
+      }
       const touched = new Set<bigint>();
       for (const ev of events) {
         const args = ev.args as Record<string, unknown>;

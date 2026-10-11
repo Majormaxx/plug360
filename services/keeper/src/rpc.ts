@@ -37,6 +37,27 @@ export function isRetryable(err: unknown): boolean {
   return err.walk((e) => RETRY_CODES.has(codeOf(e) ?? 0)) !== null;
 }
 
+/** Arc's code for an eth_getLogs range over 10,000 blocks. */
+export const ARC_LOG_RANGE_CODE = -32012;
+const RANGE_MESSAGE = /block range|range too large|ranges? over \d+ blocks|too many blocks|blocks? (are|is) not supported|exceed(s|ed)? .*blocks|limited to .*blocks/i;
+
+/**
+ * True when a provider refused an eth_getLogs call because the block range is too wide. Providers enforce
+ * their own limits with their own codes (Arc -32012, dRPC 35), and their messages can name a limit they do
+ * not actually apply, so the scan shrinks the range until the provider accepts it.
+ */
+export function isRangeLimit(err: unknown): boolean {
+  if (!(err instanceof BaseError)) return false;
+  return (
+    err.walk((e) => {
+      if (codeOf(e) === ARC_LOG_RANGE_CODE) return true;
+      const msg = (e as { message?: unknown; details?: unknown }) ?? {};
+      const text = `${typeof msg.message === 'string' ? msg.message : ''} ${typeof msg.details === 'string' ? msg.details : ''}`;
+      return RANGE_MESSAGE.test(text);
+    }) !== null
+  );
+}
+
 export class RpcExhaustedError extends Error {
   constructor(
     readonly label: string,
@@ -68,6 +89,7 @@ export class RpcPool {
   readonly clients: PublicClient[];
   private active = 0;
   private failures = 0;
+  private rangeSwitched = false;
   private readonly maxAttempts: number;
   private readonly baseDelayMs: number;
   private readonly maxDelayMs: number;
@@ -94,6 +116,20 @@ export class RpcPool {
   reset(): void {
     this.active = 0;
     this.failures = 0;
+    this.rangeSwitched = false;
+  }
+
+  /**
+   * Moves to the other endpoint once per tick after a range-limit refusal, since another provider may accept
+   * wider ranges. Returns false when there is no other endpoint or the switch was already used this tick.
+   */
+  switchForRange(): boolean {
+    if (this.clients.length < 2 || this.rangeSwitched) return false;
+    this.rangeSwitched = true;
+    this.active = (this.active + 1) % this.clients.length;
+    this.failures = 0;
+    this.opts.logger({ level: 'warn', job: 'rpc', outcome: 'switched', call: 'getLogs', reason: 'range-limit', endpoint: this.endpoint });
+    return true;
   }
 
   async call<T>(label: string, fn: (client: PublicClient) => Promise<T>): Promise<T> {
