@@ -1,0 +1,35 @@
+{
+  "name": "@plug360/wallets",
+  "version": "0.1.0",
+  "description": "Server-side client for Circle user-controlled wallets: Google and email sign-in, wallet creation, signing and contract-call challenges on Arc",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "@plug360/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./contract": {
+      "@plug360/source": "./src/contract.ts",
+      "types": "./dist/contract.d.ts",
+      "import": "./dist/contract.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "live-check": "node scripts/live-check.mjs"
+  },
+  "dependencies": {
+    "@circle-fin/user-controlled-wallets": "10.8.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}
