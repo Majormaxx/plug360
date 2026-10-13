@@ -30,12 +30,13 @@ export function isRetryable(err: unknown): boolean {
 
 /** Arc's code for an eth_getLogs range over 10,000 blocks. */
 export const ARC_LOG_RANGE_CODE = -32012;
-const RANGE_MESSAGE = /block range|range too large|ranges? over \d+ blocks|too many blocks|blocks? (are|is) not supported|exceed(s|ed)? .*blocks|limited to .*blocks/i;
+const RANGE_MESSAGE = /block range|range too large|ranges? over \d+ blocks|too many blocks|blocks? (are|is) not supported|exceed(s|ed)? .*blocks|limited to .*blocks|timeout on the free plan/i;
 
 /**
  * True when a provider refused an eth_getLogs call because the block range is too wide. Providers enforce
  * their own limits with their own codes (Arc -32012, dRPC 35), and their messages can name a limit they do
- * not actually apply, so the scan shrinks the range until the provider accepts it.
+ * not actually apply, so the scan shrinks the range until the provider accepts it. dRPC's free plan also
+ * answers a range it cannot finish in time with "Request timeout on the free plan", which a smaller range fixes.
  */
 export function isRangeLimit(err: unknown): boolean {
   if (!(err instanceof BaseError)) return false;

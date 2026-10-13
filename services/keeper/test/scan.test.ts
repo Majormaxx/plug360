@@ -160,6 +160,7 @@ describe('provider log-range limits', () => {
     expect(isRangeLimit(rpcErr(-32012, 'requested range too large'))).toBe(true);
     expect(isRangeLimit(rpcErr(35, drpcError.message))).toBe(true);
     expect(isRangeLimit(rpcErr(-32602, 'query exceeds max block range 2000'))).toBe(true);
+    expect(isRangeLimit(rpcErr(-32000, 'Request timeout on the free plan, please upgrade to paid plan'))).toBe(true);
     expect(isRangeLimit(rpcErr(-32005, 'rate limit exceeded'))).toBe(false);
     expect(isRangeLimit(rpcErr(-32000, 'execution reverted'))).toBe(false);
     expect(isRangeLimit(new BaseError('unrelated'))).toBe(false);
