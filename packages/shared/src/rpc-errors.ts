@@ -25,8 +25,12 @@ export function rpcErrorCode(err: unknown): number | undefined {
 export function isRetryable(err: unknown): boolean {
   if (!(err instanceof BaseError)) return false;
   if (err.walk((e) => e instanceof HttpRequestError || e instanceof TimeoutError)) return true;
-  return err.walk((e) => RETRY_CODES.has(codeOf(e) ?? 0)) !== null;
+  if (err.walk((e) => RETRY_CODES.has(codeOf(e) ?? 0)) !== null) return true;
+  // Some providers rate-limit with their own codes; dRPC's public plan says "You reached Public endpoint rate limit".
+  return err.walk((e) => RATE_LIMIT_MESSAGE.test(`${(e as { message?: unknown }).message ?? ''} ${(e as { details?: unknown }).details ?? ''}`)) !== null;
 }
+
+const RATE_LIMIT_MESSAGE = /rate limit|too many requests/i;
 
 /** Arc's code for an eth_getLogs range over 10,000 blocks. */
 export const ARC_LOG_RANGE_CODE = -32012;

@@ -25,6 +25,8 @@ describe('isRetryable and rpcErrorCode', () => {
     expect(isRetryable(rpc(-32005, 'limit'))).toBe(true);
     expect(isRetryable(rpc(-32014, 'header not found'))).toBe(true);
     expect(isRetryable(new HttpRequestError({ url: 'https://rpc', status: 502 }))).toBe(true);
+    expect(isRetryable(rpc(-32000, 'You reached Public endpoint rate limit, please upgrade to paid plan'))).toBe(true);
+    expect(isRetryable(rpc(-32603, 'Too Many Requests'))).toBe(true);
     expect(isRetryable(rpc(3, 'execution reverted'))).toBe(false);
   });
   it('reports the JSON-RPC code', () => {
