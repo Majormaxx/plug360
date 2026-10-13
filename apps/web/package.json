@@ -5,7 +5,10 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
+    "deps": "pnpm --filter @plug360/shared --filter @plug360/wallets build",
+    "predev": "pnpm run deps",
     "dev": "next dev",
+    "prebuild": "pnpm run deps",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
@@ -13,8 +16,10 @@
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
+    "@circle-fin/w3s-pw-web-sdk": "1.1.11",
     "@phosphor-icons/react": "^2.1.10",
     "@plug360/shared": "workspace:*",
+    "@plug360/wallets": "workspace:*",
     "@tanstack/react-query": "^5.104.2",
     "clsx": "^2.1.1",
     "motion": "^14.1.1",

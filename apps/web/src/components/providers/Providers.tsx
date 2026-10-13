@@ -6,6 +6,7 @@ import { Toaster } from 'sonner';
 import { WagmiProvider } from 'wagmi';
 import { wagmiConfig } from '@/lib/wagmi';
 import { ThemeProvider, useTheme } from './ThemeProvider';
+import { CircleResume } from '../wallet/CircleResume';
 
 function makeQueryClient() {
   return new QueryClient({
@@ -47,6 +48,7 @@ export function Providers({ children }: { children: ReactNode }) {
       <WagmiProvider config={wagmiConfig}>
         <QueryClientProvider client={queryClient}>
           {children}
+          <CircleResume />
           <ThemedToaster />
         </QueryClientProvider>
       </WagmiProvider>

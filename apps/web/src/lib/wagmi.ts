@@ -2,6 +2,8 @@ import { createPublicClient, fallback, http, type PublicClient } from 'viem';
 import { createConfig } from 'wagmi';
 import { injected } from 'wagmi/connectors';
 import { network } from './config';
+import { circleConnector } from './circle/connector';
+import { circleEnabled } from './circle/config';
 
 const transport = (urls: string[]) =>
   fallback(
@@ -16,7 +18,7 @@ const transport = (urls: string[]) =>
  */
 export const wagmiConfig = createConfig({
   chains: [network.chain],
-  connectors: [injected()],
+  connectors: circleEnabled ? [circleConnector(), injected()] : [injected()],
   multiInjectedProviderDiscovery: true,
   transports: { [network.chain.id]: transport(network.rpcUrls) },
   ssr: true,

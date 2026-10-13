@@ -4,6 +4,7 @@ import { ButtonLink } from '@/components/ui/Button';
 import { explorerAddress, network } from '@/lib/config';
 import { levelCap, MAX_LEVEL } from '@plug360/shared';
 import { usdc } from '@/lib/format';
+import { circleEnabled } from '@/lib/circle/config';
 
 const STEPS = [
   { title: 'Agree the job', body: 'Write what needs doing, set a price, and name a plug: someone you both know and trust.' },
@@ -39,9 +40,19 @@ const FAQ = [
     q: 'What if the plug disappears?',
     a: 'They get 7 days to rule on a dispute. After that, the buyer can be refunded in full, and anyone can trigger it.',
   },
+  ...(circleEnabled
+    ? [
+        {
+          q: "I've never used crypto. Can I still use it?",
+          a: 'Yes. Sign in with Google and you get your own Arc wallet, secured by Circle. Only you can approve payments from it.',
+        },
+      ]
+    : []),
   {
     q: 'Which wallets work?',
-    a: 'Any wallet that runs in your browser, like Rabby or MetaMask, or the in-app browser of a mobile wallet. Plug360 adds the Arc network for you.',
+    a: circleEnabled
+      ? 'Sign in with Google for a wallet made for you, or use any wallet that runs in your browser, like Rabby or MetaMask. Plug360 adds the Arc network for you.'
+      : 'Any wallet that runs in your browser, like Rabby or MetaMask, or the in-app browser of a mobile wallet. Plug360 adds the Arc network for you.',
   },
   {
     q: 'How do I turn USDC into cash?',

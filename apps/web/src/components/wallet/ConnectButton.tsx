@@ -15,11 +15,20 @@ import { Sheet } from '../ui/Sheet';
 import { Skeleton } from '../ui/Skeleton';
 import { ThemeToggle } from '../layout/ThemeToggle';
 import { toast } from 'sonner';
+import type { PublicClient } from 'viem';
+import { usePublicClient } from 'wagmi';
+import { useQuery } from '@tanstack/react-query';
+import { CIRCLE_CONNECTOR_ID } from '@/lib/circle/connector';
+import { circleEnabled } from '@/lib/circle/config';
+import { activate, loginErrorMessage } from '@/lib/circle/login';
+import { loadSession } from '@/lib/circle/session';
+import { CircleSignIn } from './CircleSignIn';
 
 /** Wallets announced through EIP-6963 replace the generic injected entry, so each shows once by name. */
 function visibleConnectors(connectors: readonly Connector[]) {
-  const named = connectors.filter((c) => c.id !== 'injected');
-  return named.length > 0 ? named : connectors;
+  const wallets = connectors.filter((c) => c.id !== CIRCLE_CONNECTOR_ID);
+  const named = wallets.filter((c) => c.id !== 'injected');
+  return named.length > 0 ? named : wallets;
 }
 
 export function ConnectButton({ size = 'sm', label = 'Connect' }: { size?: 'sm' | 'md' | 'lg'; label?: string }) {
@@ -41,7 +50,7 @@ export function ConnectButton({ size = 'sm', label = 'Connect' }: { size?: 'sm' 
           {label}
         </Button>
       )}
-      <Sheet open={open} onClose={() => setOpen(false)} title={address ? 'Your wallet' : 'Connect a wallet'}>
+      <Sheet open={open} onClose={() => setOpen(false)} title={address ? 'Your wallet' : circleEnabled ? 'Sign in' : 'Connect a wallet'}>
         {address ? <AccountPanel address={address} onDone={() => setOpen(false)} /> : <ConnectPanel onDone={() => setOpen(false)} />}
       </Sheet>
     </>
@@ -56,6 +65,14 @@ function ConnectPanel({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="space-y-4">
+      {circleEnabled && (
+        <>
+          <CircleSignIn onDone={onDone} />
+          <div className="flex items-center gap-3 text-xs text-faint">
+            <span className="h-px flex-1 bg-line" /> or use a wallet app <span className="h-px flex-1 bg-line" />
+          </div>
+        </>
+      )}
       {hasInjected || list.some((c) => c.id !== 'injected') ? (
         <ul className="space-y-2">
           {list.map((c) => (
@@ -89,6 +106,17 @@ function ConnectPanel({ onDone }: { onDone: () => void }) {
             </li>
           ))}
         </ul>
+      ) : circleEnabled ? (
+        <p className="text-center text-sm text-muted">
+          Have a wallet app?{' '}
+          <a className="font-medium text-ink underline underline-offset-4" href={`https://metamask.app.link/dapp/${here}`}>
+            Open in MetaMask
+          </a>{' '}
+          or{' '}
+          <a className="font-medium text-ink underline underline-offset-4" href={`https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(`https://${here}`)}`}>
+            Coinbase Wallet
+          </a>
+        </p>
       ) : (
         <div className="space-y-3">
           <Notice title="No wallet found in this browser">
@@ -115,16 +143,56 @@ function AccountPanel({ address, onDone }: { address: `0x${string}`; onDone: () 
   const { disconnect } = useDisconnect();
   const { connector } = useAccount();
   const { balance, isLoading } = useUsdc(address);
+  const isCircle = connector?.id === CIRCLE_CONNECTOR_ID;
+  const publicClient = usePublicClient() as PublicClient | undefined;
+  const code = useQuery({
+    queryKey: ['code', address],
+    enabled: isCircle && !!publicClient,
+    queryFn: () => publicClient!.getCode({ address }),
+  });
+  const [activating, setActivating] = useState(false);
+  const inactive = isCircle && code.isSuccess && (!code.data || code.data === '0x');
   return (
     <div className="space-y-5">
       <div className="rounded-[16px] bg-bg p-4">
-        <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-faint">{connector?.name ?? 'Wallet'}</p>
+        <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-faint">{isCircle ? (loadSession()?.email ?? 'Signed in with Circle') : (connector?.name ?? 'Wallet')}</p>
         <AddressText address={address} />
       </div>
       <div className="flex items-center justify-between">
         <span className="text-sm text-muted">USDC balance</span>
         {isLoading || balance === undefined ? <Skeleton className="h-5 w-20" /> : <Amount value={balance} className="font-medium" />}
       </div>
+      {inactive && (
+        <Notice
+          tone="warn"
+          title="Activate your wallet"
+          action={
+            <Button
+              size="sm"
+              variant="ink"
+              loading={activating}
+              onClick={async () => {
+                const s = loadSession();
+                if (!s || !publicClient) return;
+                setActivating(true);
+                try {
+                  await activate(s, publicClient);
+                  await code.refetch();
+                  toast.success('Wallet activated');
+                } catch (err) {
+                  toast.error(loginErrorMessage(err));
+                } finally {
+                  setActivating(false);
+                }
+              }}
+            >
+              Activate
+            </Button>
+          }
+        >
+          One approval puts your wallet on-chain so others can check your signature when you sell or referee.
+        </Notice>
+      )}
       <div className="space-y-2">
         <span className="text-sm text-muted">Appearance</span>
         <ThemeToggle />
