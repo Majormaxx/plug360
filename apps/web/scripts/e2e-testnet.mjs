@@ -140,7 +140,7 @@ try {
   await seller.page.getByLabel("What's the job?").fill(`E2E ${new Date().toISOString().slice(0, 16)}`);
   await seller.page.getByLabel('Details').fill('Automated end-to-end run against Arc testnet.');
   await seller.page.getByLabel('Price').fill('2');
-  await seller.page.getByLabel('Your plug').fill(plug.account.address);
+  await seller.page.getByLabel("Plug's wallet").fill(plug.account.address);
   await seller.page.getByText(/Level 1 plug/).waitFor();
   await seller.page.getByRole('radio', { name: '1 day' }).first().click();
   await seller.page.screenshot({ path: `${shots}01-new-mobile.png`, fullPage: true });
@@ -196,6 +196,50 @@ try {
   }
   log(`receipt ${receipt}`);
   log(`txs: ${[...buyer.sent, ...seller.sent].join(' ')}`);
+
+  // Scenario 2: the seller leaves the plug seat open, the plug claims it from the link.
+  log('open seat: seller drafts');
+  await seller.page.goto(`${base}/new`);
+  await seller.page.getByLabel("What's the job?").fill(`E2E open seat ${new Date().toISOString().slice(0, 16)}`);
+  await seller.page.getByLabel('Price').fill('2');
+  await seller.page.getByRole('radio', { name: 'They add it' }).click();
+  await seller.page.getByRole('radio', { name: '1 day' }).first().click();
+  await seller.page.getByRole('button', { name: 'Create deal link' }).click();
+  await seller.page.waitForURL(/\/deal#/);
+  await seller.page.getByText('Not your turn yet').waitFor();
+  const openLink = seller.page.url();
+
+  log('open seat: plug claims');
+  await plug.page.goto(openLink);
+  await plug.page.getByRole('button', { name: 'Be the plug' }).click();
+  await plug.page.getByText('Accepted. Send it back to the seller.').waitFor();
+  await plug.page.screenshot({ path: `${shots}07-claimed-desktop.png`, fullPage: true });
+  const claimedLink = plug.page.url();
+
+  log('open seat: seller reviews and signs');
+  await seller.page.goto(claimedLink);
+  await seller.page.getByText('Check your plug, then sign').waitFor();
+  await seller.page.screenshot({ path: `${shots}08-review-plug-mobile.png`, fullPage: true });
+  await seller.page.getByRole('button', { name: "That's my plug. Sign terms" }).click();
+  await seller.page.getByText('Signed. Now send it to the buyer.').waitFor();
+  const readyLink = seller.page.url();
+
+  log('open seat: buyer pays');
+  await buyer.page.goto(readyLink);
+  const before2 = await usdcOf(buyer.account.address);
+  await buyer.page.getByRole('button', { name: /^Pay 2\.02 USDC$/ }).click();
+  await buyer.page.waitForURL(/\/r\/0x[0-9a-f]{64}/, { timeout: 120_000 });
+  const receipt2 = buyer.page.url();
+
+  log('open seat: seller refunds');
+  await seller.page.goto(receipt2);
+  await seller.page.getByRole('button', { name: 'Refund the buyer' }).click();
+  await seller.page.getByRole('dialog').getByRole('button', { name: 'Refund the buyer' }).click();
+  await seller.page.getByText('Refunded', { exact: true }).first().waitFor({ timeout: 120_000 });
+  const after2 = await usdcOf(buyer.account.address);
+  // The buyer gets back exactly what they escrowed; only gas is spent.
+  if (before2 - after2 > 50_000n || before2 - after2 < 0n) failures.push(`open seat: buyer lost ${before2 - after2} (more than gas)`);
+  log(`open seat receipt ${receipt2}`);
 } catch (err) {
   failures.push(err instanceof Error ? err.message : String(err));
   for (const [name, page] of pages) await page.screenshot({ path: `${shots}fail-${name}.png`, fullPage: true }).catch(() => {});
@@ -207,4 +251,4 @@ if (failures.length) {
   console.error('E2E FAILED\n - ' + failures.join('\n - '));
   process.exit(1);
 }
-log('E2E PASSED: draft, sign, accept, one-step pay, refund all confirmed on Arc testnet');
+log('E2E PASSED: both flows (address known, plug claims the seat) confirmed on Arc testnet');

@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { getAddress, type Hex } from 'viem';
 import { MAX_FEE_BPS } from '@plug360/shared';
 import {
+  claimSeat,
   decodeDraft,
+  isOpenSeat,
+  reopenSeat,
   DraftError,
   encodeDraft,
   feeForBps,
@@ -133,5 +136,34 @@ describe('feeForBps', () => {
   it('refuses out-of-range percentages', () => {
     expect(() => feeForBps(1n, 501)).toThrow(RangeError);
     expect(() => feeForBps(1n, -1)).toThrow(RangeError);
+  });
+});
+
+describe('open plug seat', () => {
+  const open: Draft = { ...draft, terms: { ...draft.terms, plug: '0x0000000000000000000000000000000000000000' } };
+  delete open.sellerSig;
+
+  it('omits the plug from the link and decodes it as an open seat', () => {
+    const enc = encodeDraft(open);
+    expect(JSON.parse(atob(enc.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((enc.length + 3) % 4))).t.p).toBeUndefined();
+    const back = decodeDraft(enc, expect_);
+    expect(isOpenSeat(back)).toBe(true);
+    expect(isOpenSeat(draft)).toBe(false);
+  });
+
+  it('claiming fills the seat, keeps the terms and drops stale signatures', () => {
+    const plug = getAddress('0x5555555555555555555555555555555555555555');
+    const claimed = claimSeat({ ...open, sellerSig: draft.sellerSig! }, plug);
+    expect(claimed.terms.plug).toBe(plug);
+    expect(claimed.sellerSig).toBeUndefined();
+    expect(claimed.terms.metadataHash).toBe(open.terms.metadataHash);
+    expect(decodeDraft(encodeDraft(claimed), expect_)).toEqual(claimed);
+  });
+
+  it('reopening clears the plug and its acceptance', () => {
+    const plug = getAddress('0x5555555555555555555555555555555555555555');
+    const reopened = reopenSeat({ ...claimSeat(open, plug), plugSig: `0x${'2b'.repeat(65)}` });
+    expect(isOpenSeat(reopened)).toBe(true);
+    expect(reopened.plugSig).toBeUndefined();
   });
 });

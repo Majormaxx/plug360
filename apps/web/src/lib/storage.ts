@@ -74,3 +74,15 @@ export function logActivity(entry: Activity): void {
 export function activityFor(dealIdHex: string): Activity[] {
   return (read('activity', activitySchema) ?? []).filter((a) => a.dealId.toLowerCase() === dealIdHex.toLowerCase());
 }
+
+const plugsSchema = z.array(z.string().regex(/^0x[0-9a-fA-F]{40}$/)).max(12);
+
+/** Plugs this browser has used, most recent first, so naming the same plug again is one tap. */
+export function rememberPlug(address: string): void {
+  const all = (read('plugs', plugsSchema) ?? []).filter((a) => a.toLowerCase() !== address.toLowerCase());
+  write('plugs', [address, ...all].slice(0, 12));
+}
+
+export function recentPlugs(): string[] {
+  return read('plugs', plugsSchema) ?? [];
+}

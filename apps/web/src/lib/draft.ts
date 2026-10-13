@@ -1,5 +1,5 @@
 import { MAX_FEE_BPS, type Terms } from '@plug360/shared';
-import { bytesToHex, getAddress, isAddressEqual, keccak256, stringToBytes, type Address, type Hex } from 'viem';
+import { bytesToHex, getAddress, isAddressEqual, keccak256, stringToBytes, zeroAddress, type Address, type Hex } from 'viem';
 import { z } from 'zod';
 
 /**
@@ -33,7 +33,8 @@ const wireSchema = z.object({
   e: address,
   t: z.object({
     s: address,
-    p: address,
+    /** Absent while the seat is open: the plug fills it in from the link. */
+    p: address.optional(),
     o: hex32,
     a: uint,
     f: uint,
@@ -79,6 +80,25 @@ function fromBase64Url(data: string): string {
   return new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
 }
 
+/** True while nobody has taken the plug seat. Open drafts use the zero address, which the contract rejects. */
+export function isOpenSeat(d: Pick<Draft, 'terms'>): boolean {
+  return isAddressEqual(d.terms.plug, zeroAddress);
+}
+
+/**
+ * The plug takes an open seat. Signatures are dropped because they would cover the old terms; in the
+ * open-seat flow the seller has not signed yet anyway.
+ */
+export function claimSeat(d: Draft, plug: Address): Draft {
+  const { sellerSig: _s, plugSig: _p, ...rest } = d;
+  return { ...rest, terms: { ...d.terms, plug: getAddress(plug) } };
+}
+
+/** Undo a claim: the seller frees the seat again if the wrong person took it. */
+export function reopenSeat(d: Draft): Draft {
+  return claimSeat(d, zeroAddress);
+}
+
 export function encodeDraft(d: Draft): string {
   const wire: Wire = {
     v: 1,
@@ -86,7 +106,7 @@ export function encodeDraft(d: Draft): string {
     e: d.escrow,
     t: {
       s: d.terms.seller,
-      p: d.terms.plug,
+      ...(isOpenSeat(d) ? {} : { p: d.terms.plug }),
       o: d.terms.orderId,
       a: d.terms.price.toString(),
       f: d.terms.plugFee.toString(),
@@ -118,7 +138,7 @@ export function decodeDraft(fragment: string, expect: { chainId: number; escrow:
   const job = { title: wire.j.t, note: wire.j.n };
   const terms: Terms = {
     seller: getAddress(wire.t.s),
-    plug: getAddress(wire.t.p),
+    plug: wire.t.p ? getAddress(wire.t.p) : zeroAddress,
     orderId: wire.t.o as Hex,
     price: BigInt(wire.t.a),
     plugFee: BigInt(wire.t.f),

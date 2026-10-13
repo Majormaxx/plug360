@@ -1,10 +1,10 @@
 'use client';
 
 import { ArrowRight, Handshake, Storefront } from '@phosphor-icons/react';
-import { validateTerms, type TermsViolation } from '@plug360/shared';
+import { MAX_LEVEL, validateTerms, type TermsViolation } from '@plug360/shared';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useReducer, useState } from 'react';
-import { getAddress, isAddress, isAddressEqual } from 'viem';
+import { getAddress, isAddress, isAddressEqual, zeroAddress } from 'viem';
 import { useAccount } from 'wagmi';
 import { usePlugLevel } from '@/hooks/useEscrow';
 import { network } from '@/lib/config';
@@ -29,8 +29,12 @@ import { Segmented } from '../ui/Segmented';
 import { ConnectButton } from '../wallet/ConnectButton';
 import { FeeBreakdown } from './FeeBreakdown';
 import { PlugCheck } from './PlugCheck';
+import { PlugPicker } from './PlugPicker';
+import { QrScanButton } from './QrScan';
+import { rememberPlug } from '@/lib/storage';
 
 type Role = 'seller' | 'buyer';
+type PlugMode = 'known' | 'open';
 type Form = {
   role: Role;
   title: string;
@@ -38,6 +42,7 @@ type Form = {
   price: string;
   seller: string;
   plug: string;
+  plugMode: PlugMode;
   feeBps: number;
   windowSeconds: number;
   expirySeconds: number;
@@ -50,6 +55,7 @@ const initial: Form = {
   price: '',
   seller: '',
   plug: '',
+  plugMode: 'known',
   feeBps: 200,
   windowSeconds: 3 * 86_400,
   expirySeconds: 7 * 86_400,
@@ -84,10 +90,14 @@ export function DraftForm() {
   }, []);
 
   const seller = form.role === 'seller' ? address : isAddress(form.seller) ? getAddress(form.seller) : undefined;
-  const plugAddr = isAddress(form.plug) ? getAddress(form.plug) : undefined;
+  const open = form.plugMode === 'open';
+  const plugAddr = open ? undefined : isAddress(form.plug) ? getAddress(form.plug) : undefined;
   const price = parseUsdcInput(form.price);
   const fee = price !== undefined ? feeForBps(price, form.feeBps) : 0n;
-  const { level, isLoading: plugLoading } = usePlugLevel(plugAddr);
+  const { level: plugLevel, isLoading: plugLoading } = usePlugLevel(plugAddr);
+  // With an open seat the plug is checked when they claim it; until then the highest level's limits apply.
+  const level = open ? MAX_LEVEL : plugLevel;
+  const checkPlug = open ? ('0x0000000000000000000000000000000000000001' as const) : plugAddr;
 
   const errors = useMemo(() => {
     const e: Partial<Record<keyof Form, string>> = {};
@@ -96,13 +106,13 @@ export function DraftForm() {
     if (!form.price) e.price = 'Enter a price.';
     if (form.role === 'buyer' && !form.seller) e.seller = "Enter the seller's wallet address.";
     else if (form.role === 'buyer' && !isAddress(form.seller)) e.seller = 'That is not a valid address.';
-    if (!form.plug) e.plug = "Enter your plug's wallet address.";
-    else if (!plugAddr) e.plug = 'That is not a valid address.';
+    if (!open && !form.plug) e.plug = "Enter your plug's wallet address.";
+    else if (!open && !plugAddr) e.plug = 'That is not a valid address.';
 
-    if (seller && plugAddr && price !== undefined && level !== undefined) {
+    if (seller && checkPlug && price !== undefined && level !== undefined) {
       const terms = {
         seller,
-        plug: plugAddr,
+        plug: checkPlug,
         orderId: `0x${'00'.repeat(32)}` as const,
         price,
         plugFee: fee,
@@ -113,19 +123,21 @@ export function DraftForm() {
       const buyer = form.role === 'buyer' ? address : undefined;
       for (const v of validateTerms(terms, { now: BigInt(now), plugLevel: level, ...(buyer ? { buyer } : {}) })) {
         const field: keyof Form = v.field === 'plugFee' ? 'feeBps' : v.field === 'price' ? 'price' : v.field === 'seller' ? 'seller' : 'plug';
+        if (open && field === 'plug') continue;
         e[field] ??= messageFor(v, form.role);
       }
     }
     return e;
-  }, [form, price, fee, seller, plugAddr, level, now, address]);
+  }, [form, price, fee, seller, checkPlug, open, level, now, address]);
 
   const show = (k: keyof Form) => (submitted || touched[k] ? errors[k] : undefined);
   const needsWallet = form.role === 'seller' && !address;
-  const ready = Object.keys(errors).length === 0 && !needsWallet && level !== undefined && !plugLoading;
+  const ready = Object.keys(errors).length === 0 && !needsWallet && level !== undefined && (open || !plugLoading);
 
   function create() {
     setSubmitted(true);
-    if (!ready || !seller || !plugAddr || price === undefined) return;
+    if (!ready || !seller || (!open && !plugAddr) || price === undefined) return;
+    if (plugAddr) rememberPlug(plugAddr);
     const job = { title: form.title.trim(), note: form.note.trim() };
     const encoded = encodeDraft({
       chainId: network.chain.id,
@@ -133,7 +145,7 @@ export function DraftForm() {
       job,
       terms: {
         seller,
-        plug: plugAddr,
+        plug: plugAddr ?? zeroAddress,
         orderId: newOrderId(),
         price,
         plugFee: fee,
@@ -244,26 +256,43 @@ export function DraftForm() {
 
           <Field
             label="Your plug"
-            error={show('plug')}
-            hint="A friend you both trust. They only step in if there's a dispute, and they can never take the money for themselves."
-            aside={plugAddr && <PlugCheck plug={plugAddr} />}
+            hint={open ? "Send the link to your plug. They add their own wallet when they open it, and you check it's them before you sign." : "A friend you both trust. They only step in if there's a dispute, and they can never take the money for themselves."}
           >
-            {({ id, describedBy, invalid }) => (
-              <Input
-                id={id}
-                aria-describedby={describedBy}
-                aria-invalid={invalid}
-                placeholder="0x…"
-                className="font-mono text-[15px]"
-                spellCheck={false}
-                autoCapitalize="off"
-                autoComplete="off"
-                value={form.plug}
-                onChange={(e) => set({ plug: e.target.value.trim() })}
-                onBlur={() => touch('plug')}
+            {() => (
+              <Segmented<PlugMode>
+                label="How to add the plug"
+                size="sm"
+                value={form.plugMode}
+                onChange={(plugMode) => set({ plugMode })}
+                options={[
+                  { value: 'known', label: 'I have their address' },
+                  { value: 'open', label: 'They add it' },
+                ]}
               />
             )}
           </Field>
+          {!open && (
+            <Field label="Plug's wallet" error={show('plug')} aside={plugAddr ? <PlugCheck plug={plugAddr} /> : <QrScanButton onAddress={(a) => (set({ plug: a }), touch('plug'))} />}>
+              {({ id, describedBy, invalid }) => (
+                <div className="space-y-2.5">
+                  <Input
+                    id={id}
+                    aria-describedby={describedBy}
+                    aria-invalid={invalid}
+                    placeholder="0x…"
+                    className="font-mono text-[15px]"
+                    spellCheck={false}
+                    autoCapitalize="off"
+                    autoComplete="off"
+                    value={form.plug}
+                    onChange={(e) => set({ plug: e.target.value.trim() })}
+                    onBlur={() => touch('plug')}
+                  />
+                  <PlugPicker value={form.plug} {...(seller ? { exclude: seller } : {})} onPick={(a) => (set({ plug: a }), touch('plug'))} />
+                </div>
+              )}
+            </Field>
+          )}
 
           <Field label="Plug fee" error={show('feeBps')} hint="Split evenly between buyer and seller. Paid to the plug only when the deal pays out.">
             {() => (
@@ -328,7 +357,12 @@ export function DraftForm() {
             <p role="alert" className="text-sm text-danger-ink">Fix the highlighted fields to continue.</p>
           )}
           <p className="text-xs leading-relaxed text-faint">
-            Nothing is sent yet. The link carries the terms; {form.role === 'seller' ? 'you sign next, then your plug.' : 'the seller signs, then your plug, then you pay.'}
+            Nothing is sent yet. The link carries the terms;{' '}
+            {open
+              ? 'your plug adds their wallet and accepts first, then the seller signs.'
+              : form.role === 'seller'
+                ? 'you sign next, then your plug.'
+                : 'the seller signs, then your plug, then you pay.'}
           </p>
         </Panel>
       </aside>

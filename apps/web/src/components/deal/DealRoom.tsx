@@ -8,13 +8,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { isAddressEqual, type Address, type Hex, type PublicClient } from 'viem';
 import { useAccount, usePublicClient, useSignTypedData, useSwitchChain } from 'wagmi';
-import { useDeal } from '@/hooks/useEscrow';
+import { useDeal, usePlugLevel } from '@/hooks/useEscrow';
 import { useHashState } from '@/hooks/useDraftHash';
 import { useNow } from '@/hooks/useNow';
 import { escrowDomain, network } from '@/lib/config';
-import { decodeDraft, DraftError, encodeDraft, type Draft } from '@/lib/draft';
+import { claimSeat, decodeDraft, DraftError, encodeDraft, isOpenSeat, reopenSeat, type Draft } from '@/lib/draft';
+import { nextActor, type SigState } from '@/lib/dealRoom';
+import { signerReadiness } from '@/lib/signers';
 import { toFriendlyError } from '@/lib/errors';
-import { dateTime, dealIdToHex, duration } from '@/lib/format';
+import { dateTime, dealIdToHex, duration, usdc } from '@/lib/format';
 import { AddressText } from '../ui/AddressText';
 import { Amount } from '../ui/Amount';
 import { Button, ButtonLink } from '../ui/Button';
@@ -28,8 +30,6 @@ import { ConnectButton } from '../wallet/ConnectButton';
 import { FeeBreakdown } from './FeeBreakdown';
 import { PayPanel } from './PayPanel';
 import { PlugCheck } from './PlugCheck';
-
-type SigState = 'missing' | 'checking' | 'valid' | 'invalid';
 
 /** Verifies on-chain-equivalently: viem's verifier covers plain keys and smart-contract wallets (ERC-1271). */
 function useSigState(publicClient: PublicClient | undefined, kind: 'terms' | 'accept', terms: Terms | undefined, sig: Hex | undefined): SigState {
@@ -105,12 +105,12 @@ function Room({ draft, onUpdate }: { draft: Draft; onUpdate: (d: Draft) => void 
         ? 'plug'
         : 'buyer';
 
-  async function sign(kind: 'seller' | 'plug') {
+  async function sign(kind: 'seller' | 'plug', base: Draft = draft) {
     try {
       if (chainId !== network.chain.id) await switchChainAsync({ chainId: network.chain.id });
-      const typed = kind === 'seller' ? termsTypedData(escrowDomain, terms) : acceptTypedData(escrowDomain, terms);
+      const typed = kind === 'seller' ? termsTypedData(escrowDomain, base.terms) : acceptTypedData(escrowDomain, base.terms);
       const signature = await signTypedDataAsync(typed as never);
-      onUpdate(kind === 'seller' ? { ...draft, sellerSig: signature } : { ...draft, plugSig: signature });
+      onUpdate(kind === 'seller' ? { ...base, sellerSig: signature } : { ...base, plugSig: signature });
       toast.success(kind === 'seller' ? 'Terms signed' : 'You accepted as the plug', { description: 'Now send the updated link on.' });
     } catch (err) {
       const f = toFriendlyError(err);
@@ -120,7 +120,22 @@ function Room({ draft, onUpdate }: { draft: Draft; onUpdate: (d: Draft) => void 
   }
 
   const link = typeof window !== 'undefined' ? window.location.href : '';
-  const nextUp: 'seller' | 'plug' | 'buyer' = sellerSig !== 'valid' ? 'seller' : plugSig !== 'valid' ? 'plug' : 'buyer';
+  const open = isOpenSeat(draft);
+  const next = nextActor(open, sellerSig, plugSig);
+  const nextUp = next === 'claim' ? 'plug' : next;
+  const plugFirst = plugSig === 'valid' && sellerSig !== 'valid';
+
+  // The escrow only accepts smart-wallet signatures once that wallet is deployed (see lib/signers).
+  const readiness = useQuery({
+    queryKey: ['signer-ready', terms.seller, terms.plug, draft.sellerSig, draft.plugSig],
+    enabled: !!publicClient && !!draft.sellerSig && !!draft.plugSig && !open,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const [sc, pc] = await Promise.all([publicClient!.getCode({ address: terms.seller }), publicClient!.getCode({ address: terms.plug })]);
+      return { seller: signerReadiness(sc, draft.sellerSig!), plug: signerReadiness(pc, draft.plugSig!) };
+    },
+  });
+  const inactive = readiness.data && (readiness.data.seller !== 'ready' || readiness.data.plug !== 'ready');
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start">
@@ -162,19 +177,19 @@ function Room({ draft, onUpdate }: { draft: Draft; onUpdate: (d: Draft) => void 
               address={terms.seller}
               state={sellerSig}
               doneText="Signed the terms"
-              waitText="Needs to sign"
+              waitText={open || plugFirst ? 'Signs after the plug accepts' : 'Needs to sign'}
               active={nextUp === 'seller'}
             />
             <Seat
               n={2}
               title="Plug"
               blurb="Referees a dispute. Can only refund the buyer or pay the seller."
-              address={terms.plug}
+              address={open ? undefined : terms.plug}
               state={plugSig}
               doneText="Accepted"
-              waitText={sellerSig === 'valid' ? 'Needs to accept' : 'Accepts after the seller'}
+              waitText={open ? 'Seat open: your plug adds their wallet' : sellerSig === 'valid' ? 'Needs to accept' : 'Accepts after the seller'}
               active={nextUp === 'plug'}
-              extra={<PlugCheck plug={terms.plug} />}
+              extra={open ? undefined : <PlugCheck plug={terms.plug} />}
             />
             <li className={cn('flex gap-4 px-5 py-4', nextUp === 'buyer' && !funded && 'bg-accent-soft/60')}>
               <SeatNumber n={3} state={funded ? 'valid' : 'missing'} />
@@ -220,9 +235,40 @@ function Room({ draft, onUpdate }: { draft: Draft; onUpdate: (d: Draft) => void 
               <p className="text-sm text-muted">Connect the wallet that is part of this deal. The page will show what you need to do.</p>
               <ConnectButton size="lg" label="Connect wallet" />
             </div>
+          ) : open ? (
+            role === 'seller' ? (
+              <WaitStep text="Send this link to your plug. They add their wallet and accept, then it comes back to you to sign." link={link} />
+            ) : (
+              <ClaimStep
+                account={address}
+                price={terms.price}
+                loading={signing}
+                disabled={expired}
+                onClaim={() => sign('plug', claimSeat(draft, address))}
+              />
+            )
           ) : role === 'seller' ? (
             sellerSig === 'valid' ? (
-              <ShareStep title="Signed. Now send it to your plug." who="your plug" link={link} />
+              <ShareStep title={plugSig === 'valid' ? 'Signed. Now send it to the buyer.' : 'Signed. Now send it to your plug.'} who={plugSig === 'valid' ? 'the buyer' : 'your plug'} link={link} />
+            ) : plugFirst ? (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <p className="font-display text-lg font-semibold tracking-tight">Check your plug, then sign</p>
+                  <p className="text-sm text-muted">Someone took the plug seat and accepted. Only sign if this is your plug&apos;s wallet.</p>
+                  <div className="rounded-[14px] bg-bg p-3.5">
+                    <AddressText address={terms.plug} compact />
+                    <div className="mt-2">
+                      <PlugCheck plug={terms.plug} />
+                    </div>
+                  </div>
+                </div>
+                <Button size="lg" className="w-full" loading={signing} disabled={expired} onClick={() => sign('seller')}>
+                  {signing ? 'Check your wallet' : "That's my plug. Sign terms"}
+                </Button>
+                <Button variant="ghost" className="w-full" onClick={() => (onUpdate(reopenSeat(draft)), toast('Plug seat reopened. Send the link to your plug again.'))}>
+                  Not my plug: reopen the seat
+                </Button>
+              </div>
             ) : (
               <ActionStep
                 title="Sign the terms"
@@ -234,10 +280,14 @@ function Room({ draft, onUpdate }: { draft: Draft; onUpdate: (d: Draft) => void 
               />
             )
           ) : role === 'plug' ? (
-            sellerSig !== 'valid' ? (
+            plugSig === 'valid' ? (
+              sellerSig === 'valid' ? (
+                <ShareStep title="Accepted. Send it to the buyer." who="the buyer" link={link} />
+              ) : (
+                <ShareStep title="Accepted. Send it back to the seller." who="the seller" link={link} />
+              )
+            ) : sellerSig !== 'valid' ? (
               <WaitStep text="The seller signs first. You'll get the link after that." />
-            ) : plugSig === 'valid' ? (
-              <ShareStep title="Accepted. Send it to the buyer." who="the buyer" link={link} />
             ) : (
               <ActionStep
                 title="Accept as the plug"
@@ -250,8 +300,12 @@ function Room({ draft, onUpdate }: { draft: Draft; onUpdate: (d: Draft) => void 
             )
           ) : nextUp !== 'buyer' ? (
             <WaitStep text={nextUp === 'seller' ? 'Waiting for the seller to sign. Send them this link.' : 'Waiting for the plug to accept. Send them this link.'} link={link} />
+          ) : inactive ? (
+            <Notice tone="warn" title={`The ${readiness.data?.seller !== 'ready' ? 'seller' : 'plug'}'s wallet isn't activated yet`}>
+              Their wallet is a smart wallet that hasn&apos;t made its first transaction, so the escrow can&apos;t check their signature yet. Ask them to open Plug360 and activate it, then pay.
+            </Notice>
           ) : (
-            <PayPanel draft={draft} dealId={dealId} disabled={expired || sellerSig !== 'valid' || plugSig !== 'valid'} />
+            <PayPanel draft={draft} dealId={dealId} disabled={expired || sellerSig !== 'valid' || plugSig !== 'valid' || readiness.isLoading} />
           )}
         </Panel>
         {!funded && <ShareRow link={link} />}
@@ -272,7 +326,7 @@ function SeatNumber({ n, state }: { n: number; state: SigState }) {
   );
 }
 
-function Seat(props: { n: number; title: string; blurb: string; address: Address; state: SigState; doneText: string; waitText: string; active: boolean; extra?: React.ReactNode }) {
+function Seat(props: { n: number; title: string; blurb: string; address: Address | undefined; state: SigState; doneText: string; waitText: string; active: boolean; extra?: React.ReactNode }) {
   const status = props.state === 'valid' ? props.doneText : props.state === 'invalid' ? "Signature doesn't match" : props.state === 'checking' ? 'Checking signature' : props.waitText;
   return (
     <li className={cn('flex gap-4 px-5 py-4', props.active && 'bg-accent-soft/60')}>
@@ -285,7 +339,7 @@ function Seat(props: { n: number; title: string; blurb: string; address: Address
           </div>
           <p className="text-sm text-muted">{props.blurb}</p>
         </div>
-        <AddressText address={props.address} compact />
+        {props.address && <AddressText address={props.address} compact />}
         {props.extra}
       </div>
     </li>
@@ -300,6 +354,38 @@ function ActionStep({ title, body, cta, onClick, loading, disabled }: { title: s
       <Button size="lg" className="w-full" onClick={onClick} loading={loading} disabled={disabled}>
         {loading ? 'Check your wallet' : cta}
       </Button>
+    </div>
+  );
+}
+
+function ClaimStep({ account, price, loading, disabled, onClaim }: { account: Address; price: bigint; loading: boolean; disabled: boolean; onClaim: () => void }) {
+  const { level, cap, isLoading } = usePlugLevel(account);
+  if (isLoading || level === undefined) return <Skeleton className="h-32" />;
+  if (level === 0) {
+    return (
+      <div className="space-y-3">
+        <p className="font-display text-lg font-semibold tracking-tight">Are you the plug?</p>
+        <Notice tone="warn" title="This wallet isn't a listed plug yet">
+          Plugs are listed one at a time while the contract is new. Ask to be listed, or connect the wallet that is.
+        </Notice>
+        <ButtonLink href="/#plugs" variant="soft" className="w-full">How to become a plug</ButtonLink>
+      </div>
+    );
+  }
+  const tooBig = cap !== undefined && price > cap;
+  return (
+    <div className="space-y-3">
+      <p className="font-display text-lg font-semibold tracking-tight">Be the plug for this deal</p>
+      <p className="text-sm leading-relaxed text-muted">
+        You&apos;ll be the referee if there&apos;s a dispute, with 7 days to rule. Taking the seat adds this wallet to the deal and signs your acceptance in one step.
+      </p>
+      {tooBig ? (
+        <Notice tone="warn" title="This deal is over your limit">A level {level} plug can referee up to {usdc(cap!)} USDC.</Notice>
+      ) : (
+        <Button size="lg" className="w-full" loading={loading} disabled={disabled} onClick={onClaim}>
+          {loading ? 'Check your wallet' : 'Be the plug'}
+        </Button>
+      )}
     </div>
   );
 }
