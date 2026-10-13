@@ -8,6 +8,9 @@ import { useAccount, usePublicClient } from 'wagmi';
 import { useDeal } from '@/hooks/useEscrow';
 import { useNow } from '@/hooks/useNow';
 import { contractStep, useTx } from '@/hooks/useTx';
+import type { SponsoredAction } from '@plug360/sponsor/contract';
+
+const SPONSORED = new Set<string>(['openDispute', 'release', 'refund', 'plugRefund', 'plugReject']);
 import { explorerTx, network } from '@/lib/config';
 import { payoutSplit, roleOf, viewDeal, type ActionId, type DealView, type Role } from '@/lib/deal';
 import { dateTime, dealIdToHex, duration } from '@/lib/format';
@@ -99,7 +102,7 @@ const ACTIONS: Record<ActionId, ActionSpec> = {
     irreversible: false,
     explain: (d) => {
       const s = payoutSplit(d.price, d.plugFee);
-      return <>Sends <Amount value={s.toSeller} /> to the seller{s.toPlug > 0n && <> and <Amount value={s.toPlug} /> to the plug</>}. Anyone can trigger this; the money only goes to them.</>;
+      return <>Sends <Amount value={s.toSeller} /> to the seller{s.toPlug > 0n && <> and <Amount value={s.toPlug} /> to the plug</>}. Plug360 does this for you automatically; use this only if you don&apos;t want to wait.</>;
     },
   },
   finalize: {
@@ -250,14 +253,14 @@ function StatusHero({ view, deal, role, now }: { view: DealView; deal: Deal; rol
             : 'The buyer can still open a dispute until the window closes.',
       bar: [deal.paidAt, deal.releaseAt],
     },
-    payable: { title: 'Ready to pay out', body: 'The window has closed with no dispute. Anyone can send the seller their money now.' },
+    payable: { title: 'Paying out', body: 'The window closed with no dispute. Plug360 sends the seller and plug their money automatically, usually within a minute.' },
     disputed: {
       title: `The plug has ${left(view.plugDeadline)} to decide`,
       body: role === 'plug' ? 'Hear both sides, then rule: refund the buyer, or reject the dispute so the seller gets paid.' : 'Your plug is looking at it. If they miss the deadline, the buyer gets a full refund.',
       bar: [deal.disputedAt, view.plugDeadline],
     },
-    'dispute-expired': { title: 'The plug missed the deadline', body: 'The buyer is owed a full refund. Anyone can send it.' },
-    released: { title: 'Released to the seller', body: 'Anyone can now send the payout. It only goes to the seller and the plug.' },
+    'dispute-expired': { title: 'The plug missed the deadline', body: 'The buyer is owed a full refund. Plug360 sends it automatically, usually within a minute.' },
+    released: { title: 'Released to the seller', body: 'Plug360 sends the payout automatically, usually within a minute. It only ever goes to the seller and the plug.' },
     refunded: { title: 'Refunded', body: `The buyer got their money back on ${network.chain.name}.` },
     settled: { title: 'Paid out', body: 'The seller and the plug have been paid. This deal is done.' },
   };
@@ -296,7 +299,14 @@ function Actions({ deal, id, view, role }: { deal: Deal; id: bigint; view: DealV
       dealIdHex: idHex,
       verify: statusChanged,
       onDone: () => setNote(''),
-      steps: [contractStep(spec.label, { address: network.escrow, abi: dealEscrowAbi, functionName: spec.fn, args })],
+      // Party-only actions get their network fee covered by the gas sponsor when the wallet is short.
+      steps: [
+        contractStep(
+          spec.label,
+          { address: network.escrow, abi: dealEscrowAbi, functionName: spec.fn, args },
+          SPONSORED.has(spec.fn) ? { sponsor: { dealId: id, action: spec.fn as SponsoredAction } } : {},
+        ),
+      ],
     });
   }
 

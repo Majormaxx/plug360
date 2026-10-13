@@ -7,7 +7,7 @@
 //   base-url defaults to http://localhost:3360 (run `pnpm build && pnpm start -p 3360` first).
 import { readFileSync, mkdirSync } from 'node:fs';
 import { chromium } from 'playwright-core';
-import { createPublicClient, createWalletClient, http, parseGwei } from 'viem';
+import { createPublicClient, createWalletClient, encodeFunctionData, http, parseAbi, parseGwei, serializeErc6492Signature, toHex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 const envFile = process.argv[2];
@@ -35,12 +35,35 @@ const publicClient = createPublicClient({ chain, transport: http(RPC, { retryCou
 const shots = new URL('../test-results/e2e/', import.meta.url).pathname;
 mkdirSync(shots, { recursive: true });
 
+/** USDC the escrow sent `to` in one transaction, read from its Transfer logs (balances can be moved by dust bots). */
+async function escrowPaid(hash, to) {
+  const receipt = await publicClient.getTransactionReceipt({ hash });
+  const escrow = '0x3df58effc292d5043075d71e6705df6b7348171d';
+  let total = 0n;
+  for (const l of receipt.logs) {
+    if (l.address.toLowerCase() !== '0x3600000000000000000000000000000000000000' || l.topics[0] !== '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef') continue;
+    if (`0x${l.topics[1].slice(26)}` === escrow && `0x${l.topics[2].slice(26)}` === to.toLowerCase()) total += BigInt(l.data);
+  }
+  return total;
+}
+
 const log = (...a) => console.log(`[e2e ${new Date().toISOString().slice(11, 19)}]`, ...a);
 
 /** A browser context whose injected wallet signs with `key`. Requests other than signing go to the RPC. */
-async function walletContext(browser, key, name, viewport) {
-  const account = privateKeyToAccount(key);
-  const wallet = createWalletClient({ account, chain, transport: http(RPC, { retryCount: 4 }) });
+const factoryAbi = parseAbi(['function deploy(address owner, bytes32 salt) returns (address)', 'function addressOf(address owner, bytes32 salt) view returns (address)']);
+const walletAbi = parseAbi(['function execute(address target, bytes data) returns (bytes)']);
+
+/**
+ * `smart` makes the injected wallet behave like a smart-account wallet that has never sent a transaction:
+ * its address is counterfactual, it signs with an ERC-6492 wrapper, and it sends through execute().
+ */
+async function walletContext(browser, key, name, viewport, smart) {
+  const owner = privateKeyToAccount(key);
+  const wallet = createWalletClient({ account: owner, chain, transport: http(RPC, { retryCount: 4 }) });
+  const smartAddress = smart
+    ? await publicClient.readContract({ address: smart.factory, abi: factoryAbi, functionName: 'addressOf', args: [owner.address, smart.salt] })
+    : undefined;
+  const account = smart ? { address: smartAddress, signTypedData: owner.signTypedData } : owner;
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2, hasTouch: viewport.width < 600 });
   const sent = [];
   await ctx.exposeBinding('__testWallet', async (_src, method, paramsJson) => {
@@ -57,17 +80,25 @@ async function walletContext(browser, key, name, viewport) {
       case 'eth_signTypedData_v4': {
         const typed = JSON.parse(params[1]);
         delete typed.types.EIP712Domain;
-        return account.signTypedData(typed);
+        const sig = await owner.signTypedData(typed);
+        if (!smart) return sig;
+        const code = await publicClient.getCode({ address: smartAddress });
+        if (code && code !== '0x') return sig;
+        const data = encodeFunctionData({ abi: factoryAbi, functionName: 'deploy', args: [owner.address, smart.salt] });
+        return serializeErc6492Signature({ address: smart.factory, data, signature: sig });
       }
       case 'personal_sign':
         return account.signMessage({ message: { raw: params[0] } });
       case 'eth_sendTransaction': {
         const tx = params[0];
+        const routed = smart
+          ? { to: smartAddress, data: encodeFunctionData({ abi: walletAbi, functionName: 'execute', args: [tx.to, tx.data ?? '0x'] }) }
+          : { to: tx.to, data: tx.data };
         const hash = await wallet.sendTransaction({
-          to: tx.to,
-          data: tx.data,
+          to: routed.to,
+          data: routed.data,
           value: tx.value ? BigInt(tx.value) : 0n,
-          ...(tx.gas ? { gas: BigInt(tx.gas) } : {}),
+          ...(tx.gas && !smart ? { gas: BigInt(tx.gas) } : {}),
           maxFeePerGas: tx.maxFeePerGas ? BigInt(tx.maxFeePerGas) : parseGwei('25'),
           maxPriorityFeePerGas: tx.maxPriorityFeePerGas ? BigInt(tx.maxPriorityFeePerGas) : parseGwei('1'),
         });
@@ -189,7 +220,9 @@ try {
 
   // Checks against the chain, not the UI.
   if (buyerBefore - buyerPaid < 2_020_000n) failures.push(`buyer paid ${buyerBefore - buyerPaid}, expected >= 2020000 (incl. gas)`);
-  if (buyerPaid + 2_020_000n !== buyerAfter) failures.push(`refund mismatch: ${buyerPaid} + 2020000 != ${buyerAfter}`);
+  const refunded = await escrowPaid(seller.sent.at(-1), buyer.account.address);
+  if (refunded !== 2_020_000n) failures.push(`refund paid ${refunded}, expected 2020000`);
+  void buyerAfter;
   for (const h of [...buyer.sent, ...seller.sent]) {
     const r = await publicClient.getTransactionReceipt({ hash: h });
     if (r.status !== 'success') failures.push(`tx ${h} status ${r.status}`);
@@ -236,10 +269,83 @@ try {
   await seller.page.getByRole('button', { name: 'Refund the buyer' }).click();
   await seller.page.getByRole('dialog').getByRole('button', { name: 'Refund the buyer' }).click();
   await seller.page.getByText('Refunded', { exact: true }).first().waitFor({ timeout: 120_000 });
-  const after2 = await usdcOf(buyer.account.address);
-  // The buyer gets back exactly what they escrowed; only gas is spent.
-  if (before2 - after2 > 50_000n || before2 - after2 < 0n) failures.push(`open seat: buyer lost ${before2 - after2} (more than gas)`);
+  // The buyer gets back exactly what they escrowed.
+  const refunded2 = await escrowPaid(seller.sent.at(-1), buyer.account.address);
+  if (refunded2 !== 2_020_000n) failures.push(`open seat: refund paid ${refunded2}, expected 2020000`);
+  void before2;
   log(`open seat receipt ${receipt2}`);
+
+  // Scenario 3: the seller uses a smart-account wallet that has never sent a transaction. Its signature is
+  // ERC-6492 wrapped; the gas sponsor deploys the wallet during payment and nobody is asked to do anything.
+  if (env.FACTORY_ADDR && env.SPONSOR_ADDR) {
+    const salt = toHex(crypto.getRandomValues(new Uint8Array(32)));
+    const smartSeller = await walletContext(browser, env.SELLER_KEY, 'smart-seller', mobile, { factory: env.FACTORY_ADDR, salt });
+    const smartAddr = smartSeller.account.address;
+    log(`smart seller ${smartAddr} (code: ${(await publicClient.getCode({ address: smartAddr })) ?? 'none'})`);
+    await smartSeller.page.goto(`${base}/new`);
+    await connect(smartSeller.page, 'smart-seller', smartAddr);
+    await smartSeller.page.getByLabel("What's the job?").fill(`E2E smart wallet ${new Date().toISOString().slice(0, 16)}`);
+    await smartSeller.page.getByLabel('Price').fill('1');
+    await smartSeller.page.getByLabel("Plug's wallet").fill(plug.account.address);
+    await smartSeller.page.getByText(/Level 1 plug/).waitFor();
+    await smartSeller.page.getByRole('button', { name: 'Create deal link' }).click();
+    await smartSeller.page.waitForURL(/\/deal#/);
+    await smartSeller.page.getByRole('button', { name: 'Sign terms' }).click();
+    await smartSeller.page.getByText('Signed. Now send it to your plug.').waitFor();
+    await plug.page.goto(smartSeller.page.url());
+    await plug.page.getByRole('button', { name: 'Accept', exact: true }).click();
+    await plug.page.getByText('Accepted. Send it to the buyer.').waitFor();
+    log('smart seller: buyer pays (sponsor deploys the seller wallet)');
+    await buyer.page.goto(plug.page.url());
+    await buyer.page.getByRole('button', { name: /^Pay 1\.01 USDC$/ }).click();
+    await buyer.page.waitForURL(/\/r\/0x[0-9a-f]{64}/, { timeout: 180_000 });
+    const deployedCode = await publicClient.getCode({ address: smartAddr });
+    if (!deployedCode || deployedCode === '0x') failures.push('smart seller wallet was not deployed');
+    log(`smart seller deployed; receipt ${buyer.page.url()}`);
+    await smartSeller.page.goto(buyer.page.url());
+    await smartSeller.page.getByRole('button', { name: 'Refund the buyer' }).click();
+    await smartSeller.page.getByRole('dialog').getByRole('button', { name: 'Refund the buyer' }).click();
+    await smartSeller.page.getByText('Refunded', { exact: true }).first().waitFor({ timeout: 120_000 });
+    log('smart seller: refunded through the deployed wallet');
+    await smartSeller.ctx.close();
+  }
+
+  // Scenario 4: a plug who holds no USDC at all rules a real dispute. The gas sponsor covers the fee.
+  if (env.PLUG2_KEY && env.SPONSOR_ADDR) {
+    const plug2 = await walletContext(browser, env.PLUG2_KEY, 'empty-plug', desktop);
+    const before = await publicClient.getBalance({ address: plug2.account.address });
+    log(`empty plug ${plug2.account.address} balance ${before}`);
+    await seller.page.goto(`${base}/new`);
+    await seller.page.getByLabel("What's the job?").fill(`E2E empty plug ${new Date().toISOString().slice(0, 16)}`);
+    await seller.page.getByLabel('Price').fill('1');
+    await seller.page.getByLabel("Plug's wallet").fill(plug2.account.address);
+    await seller.page.getByText(/Level 1 plug/).waitFor();
+    await seller.page.getByRole('button', { name: 'Create deal link' }).click();
+    await seller.page.waitForURL(/\/deal#/);
+    await seller.page.getByRole('button', { name: 'Sign terms' }).click();
+    await seller.page.getByText('Signed. Now send it to your plug.').waitFor();
+    await plug2.page.goto(seller.page.url());
+    await connect(plug2.page, 'empty-plug', plug2.account.address);
+    await plug2.page.getByRole('button', { name: 'Accept', exact: true }).click();
+    await plug2.page.getByText('Accepted. Send it to the buyer.').waitFor();
+    await buyer.page.goto(plug2.page.url());
+    await buyer.page.getByRole('button', { name: /^Pay 1\.01 USDC$/ }).click();
+    await buyer.page.waitForURL(/\/r\/0x[0-9a-f]{64}/, { timeout: 120_000 });
+    const receipt4 = buyer.page.url();
+    log('empty plug: buyer opens a dispute');
+    await buyer.page.getByRole('button', { name: 'Open a dispute' }).click();
+    await buyer.page.getByRole('dialog').getByLabel("What's wrong?").fill('E2E: job not delivered');
+    await buyer.page.getByRole('dialog').getByRole('button', { name: 'Open a dispute' }).click();
+    await buyer.page.getByText('In dispute').first().waitFor({ timeout: 120_000 });
+    log('empty plug: plug rules for the buyer with sponsored gas');
+    await plug2.page.goto(receipt4);
+    await plug2.page.getByRole('button', { name: 'Rule for the buyer' }).click();
+    await plug2.page.getByRole('dialog').getByRole('button', { name: 'Rule for the buyer' }).click();
+    await plug2.page.getByText('Refunded', { exact: true }).first().waitFor({ timeout: 180_000 });
+    if (plug2.sent.length !== 1) failures.push(`empty plug sent ${plug2.sent.length} transactions, expected 1`);
+    log(`empty plug ruled; ${receipt4}`);
+    await plug2.page.screenshot({ path: `${shots}09-empty-plug-ruled.png`, fullPage: true });
+  }
 } catch (err) {
   failures.push(err instanceof Error ? err.message : String(err));
   for (const [name, page] of pages) await page.screenshot({ path: `${shots}fail-${name}.png`, fullPage: true }).catch(() => {});
@@ -251,4 +357,4 @@ if (failures.length) {
   console.error('E2E FAILED\n - ' + failures.join('\n - '));
   process.exit(1);
 }
-log('E2E PASSED: both flows (address known, plug claims the seat) confirmed on Arc testnet');
+log('E2E PASSED: address known, plug claims the seat, smart-wallet seller (sponsor deploy), empty plug (sponsored gas), all on Arc testnet');

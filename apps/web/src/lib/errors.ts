@@ -58,6 +58,9 @@ export const CONTRACT_ERRORS: Record<string, string> = {
 /** Turns anything thrown by wagmi, viem or a wallet into copy a person can act on. */
 export function toFriendlyError(err: unknown): FriendlyError {
   if (!(err instanceof BaseError)) {
+    if (err instanceof Error && err.name === 'SponsorApiError') {
+      return { kind: 'network', title: "We couldn't cover the network fee for you just now.", detail: err.message };
+    }
     if (err instanceof Error && /reject|denied|cancel/i.test(err.message)) {
       return { kind: 'cancelled', title: 'You cancelled in your wallet.' };
     }

@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "deps": "pnpm --filter @plug360/shared --filter @plug360/wallets build",
+    "deps": "pnpm --filter @plug360/shared --filter @plug360/wallets --filter @plug360/sponsor build",
     "predev": "pnpm run deps",
     "dev": "next dev",
     "prebuild": "pnpm run deps",
@@ -19,6 +19,7 @@
     "@circle-fin/w3s-pw-web-sdk": "1.1.11",
     "@phosphor-icons/react": "^2.1.10",
     "@plug360/shared": "workspace:*",
+    "@plug360/sponsor": "workspace:*",
     "@plug360/wallets": "workspace:*",
     "@tanstack/react-query": "^5.104.2",
     "clsx": "^2.1.1",

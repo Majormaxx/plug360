@@ -11,6 +11,7 @@ Four roles, four separate keys. Never reuse one key for two roles, and never reu
 | Owner | `owner()` of the contract | Listing plugs, pause and unpause, sweeping stray USDC, ownership transfer | Mainnet: a 2-of-3 Safe, or a hardware wallet until the Safe exists. Testnet: a generated key |
 | Deployer | A few USDC for gas | The deploy transaction only; no rights after deploy | Hot key, emptied after deploy |
 | Keeper | A few USDC for gas | `finalizeExpiredDispute` and `retryPayout`, both permissionless | Hot key on the keeper host; no contract rights, so a leak costs only its gas balance |
+| Gas sponsor | A few USDC | Deploying counterfactual smart wallets and topping up gas for the deal party who must act; never touches deal funds | Hot key in the web server env (`SPONSOR_PRIVATE_KEY`), kept small; the keeper alerts when it runs low |
 | Proof wallets (seller, plug, buyer) | Small USDC balances | The proof deals | Team wallets |
 
 Arc testnet blocklists the well-known Foundry and Hardhat test accounts (the `test test ... junk` mnemonic). Always generate fresh keys: `cast wallet new`.
@@ -42,6 +43,19 @@ Arc runs Osaka with its own precompiles, so scripts run under Arc Foundry (`arc-
 9. Start the keeper with the escrow address and deploy block (see `services/keeper`).
 10. Publish the contract address in the README and every announcement, so users can check they are on the real contract.
 
+## Gas
+
+Nobody in a deal should need to buy gas before they can act. Three layers cover it:
+
+| Who | Paid by | How |
+|---|---|---|
+| People signed in with Google or email (Circle smart wallets) | Circle Gas Station | Testnet has a default policy (50 USDC a day on Arc testnet). Mainnet needs a paid policy in Circle's console before launch |
+| Plain-key wallets that must act (buyer disputes or releases, seller refunds, plug rules) | Plug360 gas sponsor | The app asks `/api/sponsor/gas` when the wallet holds too little; the sponsor checks the deal on-chain and sends just enough |
+| Smart wallets that signed before their first transaction | Plug360 gas sponsor | During payment the app sends the ERC-6492 signature to `/api/sponsor/prepare-signer`; the sponsor verifies it against the exact terms and deploys the wallet |
+| Payouts, expired disputes, stuck payouts | Keeper | Permissionless calls the keeper makes on its own (`AUTO_PAYOUT=true` by default) |
+
+Fund the sponsor with a few USDC and set `SPONSOR_ADDRESS` on the keeper so it alerts below `MIN_SPONSOR_BALANCE_USDC` (default 0.5). If the sponsor is empty or unset, the app still works: wallets just show their own "not enough USDC for gas" message.
+
 ## Owner actions
 
 With an EOA owner, `make list-plug` and the `script/Admin.s.sol` functions broadcast directly. With a Safe owner, run the same script without `--broadcast`; it prints the target and calldata to paste into the Safe transaction builder:
@@ -72,6 +86,7 @@ Every owner action emits an event (`PlugLevelSet`, `Paused`, `Unpaused`, `Owners
 | Payout deferred | A payout leg failed, usually a USDC-blocklisted address | Nothing to do. The keeper retries with backoff; the leg pays when the address is unblocked, and it can only ever go to the original address |
 | Dispute deadline near | A plug has under 24 hours to rule | Remind the plug. If they miss it, the keeper refunds the buyer in full |
 | Keeper gas low | The keeper may stop sending transactions | Top up the keeper address |
+| Sponsor low | People without USDC may get stuck before acting | Top up the sponsor address |
 
 ## Incidents
 

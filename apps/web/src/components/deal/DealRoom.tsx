@@ -135,7 +135,8 @@ function Room({ draft, onUpdate }: { draft: Draft; onUpdate: (d: Draft) => void 
       return { seller: signerReadiness(sc, draft.sellerSig!), plug: signerReadiness(pc, draft.plugSig!) };
     },
   });
-  const inactive = readiness.data && (readiness.data.seller !== 'ready' || readiness.data.plug !== 'ready');
+  // `deploy` is handled inside payment by the gas sponsor; only a signature nothing can rescue blocks Pay.
+  const unusable = readiness.data && (readiness.data.seller === 'unusable' || readiness.data.plug === 'unusable');
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start">
@@ -300,9 +301,9 @@ function Room({ draft, onUpdate }: { draft: Draft; onUpdate: (d: Draft) => void 
             )
           ) : nextUp !== 'buyer' ? (
             <WaitStep text={nextUp === 'seller' ? 'Waiting for the seller to sign. Send them this link.' : 'Waiting for the plug to accept. Send them this link.'} link={link} />
-          ) : inactive ? (
-            <Notice tone="warn" title={`The ${readiness.data?.seller !== 'ready' ? 'seller' : 'plug'}'s wallet isn't activated yet`}>
-              Their wallet is a smart wallet that hasn&apos;t made its first transaction, so the escrow can&apos;t check their signature yet. Ask them to open Plug360 and activate it, then pay.
+          ) : unusable ? (
+            <Notice tone="warn" title={`The ${readiness.data?.seller === 'unusable' ? 'seller' : 'plug'} needs to sign again`}>
+              Their wallet signed in a way the escrow can&apos;t check. Ask them to open the link and sign once more; it takes a few seconds.
             </Notice>
           ) : (
             <PayPanel draft={draft} dealId={dealId} disabled={expired || sellerSig !== 'valid' || plugSig !== 'valid' || readiness.isLoading} />

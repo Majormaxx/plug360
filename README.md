@@ -10,7 +10,9 @@ Status: in development. The contract is unaudited and capped at 100 USDC per dea
 |---|---|---|
 | [`contracts/`](contracts/) | `DealEscrow` (Foundry): the escrow, its unit, invariant and Arc fork tests, deploy, admin and proof scripts | Complete; live on Arc testnet |
 | [`packages/shared/`](packages/shared/) | ABI, chain config, EIP-712 types and the funding rules, checked against the deployed contract | Complete |
-| [`services/keeper/`](services/keeper/) | Refunds buyers when a plug misses the 7-day deadline, retries parked payouts, and alerts on solvency and owner actions | Complete; ran against the testnet deployment |
+| [`services/keeper/`](services/keeper/) | Pays out finished deals, refunds buyers when a plug misses the 7-day deadline, retries parked payouts, and alerts on solvency, owner actions and low gas | Complete; ran against the testnet deployment |
+| [`services/sponsor/`](services/sponsor/) | Gas sponsor: deploys smart wallets from ERC-6492 signatures and covers gas for the deal party who must act | Complete; proven on Arc testnet |
+| [`services/wallets/`](services/wallets/) | Google and email sign-in through Circle user-controlled wallets | Built; waiting on Circle credentials for live verification |
 | [`packages/testkit/`](packages/testkit/) | Test helpers: local chain, contract deployment, an RPC proxy that behaves like Arc's | Test-only |
 | [`apps/web/`](apps/web/) | The deal room: create, sign, pay, dispute and settle deals from a phone or desktop | Complete; end-to-end tested against the testnet deployment |
 

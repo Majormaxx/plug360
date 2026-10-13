@@ -1,0 +1,36 @@
+{
+  "name": "@plug360/sponsor",
+  "version": "0.1.0",
+  "description": "Plug360 gas sponsor: deploys counterfactual smart wallets from ERC-6492 signatures and tops up gas for deal parties who must act",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "@plug360/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./contract": {
+      "@plug360/source": "./src/contract.ts",
+      "types": "./dist/contract.d.ts",
+      "import": "./dist/contract.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@plug360/shared": "workspace:*",
+    "viem": "^2.57.4",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@plug360/testkit": "workspace:*",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

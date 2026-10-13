@@ -9,6 +9,9 @@ import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wa
 import { explorerTx, network } from '@/lib/config';
 import { toFriendlyError } from '@/lib/errors';
 import { logActivity } from '@/lib/storage';
+import { requestGas, SponsorApiError } from '@/lib/sponsor';
+import { ensureGasFor } from '@/lib/gas';
+import type { SponsoredAction } from '@plug360/sponsor/contract';
 import { idleTx, isBusy, txReducer } from '@/lib/tx';
 
 export type StepContext = { account: Address; publicClient: PublicClient; walletClient: WalletClient; fees: FeeOverrides };
@@ -19,11 +22,34 @@ export type StepContext = { account: Address; publicClient: PublicClient; wallet
  */
 export type Step = { label: string; prepare: (ctx: StepContext) => Promise<() => Promise<Hash>> };
 
+type ContractCall = { address: Address; abi: Abi; functionName: string; args: readonly unknown[] };
+
+/**
+ * Makes sure a plain-key wallet can pay gas for a sponsored action. If it holds too little USDC for gas,
+ * the gas sponsor tops it up first; smart wallets are skipped because Circle's Gas Station covers them.
+ */
+async function ensureGas(ctx: StepContext, call: ContractCall, sponsor: { dealId: bigint; action: SponsoredAction }) {
+  const { account, publicClient, fees } = ctx;
+  await ensureGasFor(
+    account,
+    fees.maxFeePerGas,
+    {
+      getCode: (a) => publicClient.getCode({ address: a }),
+      estimateGas: () => publicClient.estimateContractGas({ ...call, account } as never),
+      getBalance: (a) => publicClient.getBalance({ address: a }),
+      requestGas: () => requestGas(account, sponsor.dealId, sponsor.action),
+    },
+    (err) => err instanceof SponsorApiError && err.reason === 'unconfigured',
+  );
+}
+
 /** A step that calls one contract function: simulated first, then sent with Arc's fee floor. */
-export function contractStep(label: string, call: { address: Address; abi: Abi; functionName: string; args: readonly unknown[] }): Step {
+export function contractStep(label: string, call: ContractCall, opts: { sponsor?: { dealId: bigint; action: SponsoredAction } } = {}): Step {
   return {
     label,
-    prepare: async ({ account, publicClient, walletClient, fees }) => {
+    prepare: async (ctx) => {
+      const { account, publicClient, walletClient, fees } = ctx;
+      if (opts.sponsor) await ensureGas(ctx, call, opts.sponsor);
       await publicClient.simulateContract({ ...call, account } as unknown as SimulateContractParameters);
       return () => walletClient.writeContract({ ...call, account, chain: network.chain, ...fees } as unknown as WriteContractParameters);
     },
@@ -32,7 +58,10 @@ export function contractStep(label: string, call: { address: Address; abi: Abi; 
 
 export type RunOptions = {
   label: string;
-  steps: Step[];
+  /** Wallet steps, or a builder that runs first (during "checking") for work that must happen before them. */
+  steps: Step[] | (() => Promise<Step[]>);
+  /** Number of wallet steps when `steps` is a builder, for the progress display. */
+  stepCount?: number;
   dealIdHex?: string;
   /** Asked when a receipt does not arrive in time: true means the intended state change is visible on-chain. */
   verify?: () => Promise<boolean>;
@@ -66,14 +95,15 @@ export function useTx() {
   const run = useCallback(
     async (opts: RunOptions) => {
       if (isBusy(stateRef.current)) return;
-      dispatch({ type: 'start', label: opts.label, steps: opts.steps.length });
+      dispatch({ type: 'start', label: opts.label, steps: Array.isArray(opts.steps) ? opts.steps.length : (opts.stepCount ?? 1) });
       const hashes: Hash[] = [];
       let toastId: string | number | undefined;
       try {
         if (!address || !walletClient || !publicClient) throw new Error('Connect a wallet first.');
         if (chainId !== network.chain.id) await switchChainAsync({ chainId: network.chain.id });
 
-        for (const step of opts.steps) {
+        const steps = Array.isArray(opts.steps) ? opts.steps : await opts.steps();
+        for (const step of steps) {
           const fees = await feeOverrides(publicClient);
           const send = await step.prepare({ account: address, publicClient, walletClient, fees });
           dispatch({ type: 'prompt' });
