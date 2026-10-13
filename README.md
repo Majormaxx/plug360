@@ -12,7 +12,7 @@ Status: in development. The contract is unaudited and capped at 100 USDC per dea
 | [`packages/shared/`](packages/shared/) | ABI, chain config, EIP-712 types and the funding rules, checked against the deployed contract | Complete |
 | [`services/keeper/`](services/keeper/) | Refunds buyers when a plug misses the 7-day deadline, retries parked payouts, and alerts on solvency and owner actions | Complete; ran against the testnet deployment |
 | [`packages/testkit/`](packages/testkit/) | Test helpers: local chain, contract deployment, an RPC proxy that behaves like Arc's | Test-only |
-| `apps/web/` | The deal room | Not started |
+| [`apps/web/`](apps/web/) | The deal room: create, sign, pay, dispute and settle deals from a phone or desktop | Complete; end-to-end tested against the testnet deployment |
 
 ## Arc testnet deployment
 
@@ -52,7 +52,8 @@ Paths: canary is a 1 USDC deal the seller sends back; P1 the seller sends the mo
 ```sh
 git submodule update --init --recursive
 pnpm install
-pnpm build && pnpm test          # TypeScript packages
+pnpm build && pnpm test          # TypeScript packages and the web app
+pnpm --filter @plug360/web dev   # the deal room on http://localhost:3000
 cd contracts && make test        # contracts: unit, fuzz and invariant tests
 cd contracts && make hooks       # commit and push gates
 ```

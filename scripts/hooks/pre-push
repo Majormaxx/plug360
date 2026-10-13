@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Full gate on every push (stands in for CI while GitHub Actions is unavailable):
-# unit, fuzz and invariant tests, Slither with no medium or high findings, and the Arc fork tests.
+# unit, fuzz and invariant tests, Slither with no medium or high findings, the Arc fork tests, and
+# typecheck plus tests for every TypeScript package (shared, keeper, web).
 # PLUG360_SKIP_ARC=1 skips only the Arc fork tests (they need the public testnet RPC).
 set -euo pipefail
 export PATH="$HOME/.local/bin:$HOME/.foundry/bin:$PATH"
@@ -16,6 +17,7 @@ mkdir -p cache
   if [ "${PLUG360_SKIP_ARC:-0}" != 1 ]; then
     make test-arc || (sleep 10 && make test-arc)
   fi
+  (cd "$root" && pnpm -r typecheck && pnpm -r test)
   echo "== push gate passed"
 } 2>&1 | tee "$log"
 exit "${PIPESTATUS[0]}"
