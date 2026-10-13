@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Independently checks a proof run on-chain: every broadcast transaction must have a successful receipt and
-# the escrow must end owing nothing. Usage: script/check-proofs.sh [env-file]
+# the escrow must end owing nothing (stray dust sent to it is reported, not treated as a failure). Usage: script/check-proofs.sh [env-file]
 set -euo pipefail
 export PATH="$HOME/.local/bin:$HOME/.foundry/bin:$PATH"
 cd "$(dirname "$0")/.."
@@ -33,4 +33,7 @@ for role in SELLER PLUG BUYER; do
   echo "$role ${!var} $(cast call "$USDC" 'balanceOf(address)(uint256)' "${!var}" --rpc-url "$RPC_URL" | cut -d' ' -f1)"
 done
 
-[ "$bad" = 0 ] && [ "$held" = 0 ] && [ "$balance" = 0 ] && echo "proof run verified" || { echo "proof run NOT verified"; exit 1; }
+# Anyone can send USDC to the escrow (address-poisoning bots send dust), so a balance above zero is not a
+# failure: the escrow must owe nothing, and any excess is stray funds the owner can sweep.
+[ "$balance" -gt "$held" ] && echo "note: $((balance - held)) base units of stray USDC sit in the escrow (sweepExcess can return them)"
+[ "$bad" = 0 ] && [ "$held" = 0 ] && [ "$balance" -ge "$held" ] && echo "proof run verified" || { echo "proof run NOT verified"; exit 1; }

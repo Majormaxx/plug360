@@ -14,6 +14,11 @@ import type { Draft } from '@/lib/draft';
 import { dealIdToHex, duration } from '@/lib/format';
 import { multicall3FromAbi, oneClickCalls, type PayInput } from '@/lib/pay';
 import { rememberTitle } from '@/lib/storage';
+import { lookalikeOf } from '@/lib/lookalike';
+import { knownAddresses, lookalikeMessage } from '@/lib/knownAddresses';
+import { prepareSigner } from '@/lib/sponsor';
+import { signerReadiness } from '@/lib/signers';
+import type { Hex } from 'viem';
 import { Amount } from '../ui/Amount';
 import { Button, ButtonLink } from '../ui/Button';
 import { Field, Input } from '../ui/Field';
@@ -59,7 +64,10 @@ export function PayPanel({ draft, dealId, disabled }: { draft: Draft; dealId: bi
   const mode: Mode = canOneClick.data === false ? 'two' : (modeChoice ?? 'one');
 
   const escrowed = escrowedAmount(terms.price, terms.plugFee);
-  const refundTo = customRefund ? (isAddress(refundInput) ? getAddress(refundInput) : undefined) : address;
+  const typedRefund = customRefund && isAddress(refundInput) ? getAddress(refundInput) : undefined;
+  // A refund address is where a poisoned paste hurts most, so a look-alike blocks payment outright.
+  const refundLookalike = typedRefund ? lookalikeOf(typedRefund, [...knownAddresses(address), terms.seller, terms.plug]) : undefined;
+  const refundTo = customRefund ? (refundLookalike ? undefined : typedRefund) : address;
   const short = balance !== undefined && balance < escrowed;
   const needsApproval = allowance === undefined || allowance < escrowed;
 
@@ -94,7 +102,7 @@ export function PayPanel({ draft, dealId, disabled }: { draft: Draft; dealId: bi
 
   function pay() {
     if (!input) return;
-    const steps: Step[] =
+    const buildPaySteps = (input: PayInput): Step[] =>
       mode === 'one'
         ? [
             contractStep(needsApproval ? 'Approve and pay' : 'Pay', {
@@ -115,7 +123,19 @@ export function PayPanel({ draft, dealId, disabled }: { draft: Draft; dealId: bi
               args: [input.terms, input.sellerSig, input.plugSig, input.refundTo],
             }),
           ];
-    void run({ label: 'Payment', steps, dealIdHex: idHex, verify: isFunded, onDone: openReceipt });
+
+    // Signatures from smart wallets that have not made a transaction yet get their wallet deployed by the gas
+    // sponsor first; plain keys and deployed wallets pass straight through.
+    const usable = async (kind: 'terms' | 'accept', signer: `0x${string}`, sig: Hex): Promise<Hex> => {
+      const code = await publicClient?.getCode({ address: signer });
+      return signerReadiness(code, sig) === 'deploy' ? (await prepareSigner(kind, terms, sig)).signature : sig;
+    };
+    const buildSteps = async (): Promise<Step[]> => {
+      const ready: PayInput = { ...input, sellerSig: await usable('terms', terms.seller, input.sellerSig), plugSig: await usable('accept', terms.plug, input.plugSig) };
+      return buildPaySteps(ready);
+    };
+    const stepCount = mode === 'one' ? 1 : needsApproval ? 2 : 1;
+    void run({ label: 'Payment', steps: buildSteps, stepCount, dealIdHex: idHex, verify: isFunded, onDone: openReceipt });
   }
 
   const blocked = disabled || paused === true || short || !refundTo || violations.length > 0 || usdcLoading;
@@ -151,7 +171,7 @@ export function PayPanel({ draft, dealId, disabled }: { draft: Draft; dealId: bi
           description={customRefund ? 'Use an address you control, never the seller or the plug.' : 'Refunds go back to this wallet.'}
         />
         {customRefund && (
-          <Field label="Refund address" error={refundInput && !refundTo ? 'That is not a valid address.' : undefined}>
+          <Field label="Refund address" error={refundLookalike ? lookalikeMessage(refundLookalike) : refundInput && !refundTo ? 'That is not a valid address.' : undefined}>
             {({ id, describedBy, invalid }) => (
               <Input id={id} aria-describedby={describedBy} aria-invalid={invalid} className="font-mono text-[15px]" placeholder="0x…" spellCheck={false} autoCapitalize="off" value={refundInput} onChange={(e) => setRefundInput(e.target.value.trim())} />
             )}

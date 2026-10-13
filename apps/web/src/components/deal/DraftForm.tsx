@@ -32,6 +32,8 @@ import { PlugCheck } from './PlugCheck';
 import { PlugPicker } from './PlugPicker';
 import { QrScanButton } from './QrScan';
 import { rememberPlug } from '@/lib/storage';
+import { lookalikeOf } from '@/lib/lookalike';
+import { knownAddresses, lookalikeMessage } from '@/lib/knownAddresses';
 
 type Role = 'seller' | 'buyer';
 type PlugMode = 'known' | 'open';
@@ -108,6 +110,13 @@ export function DraftForm() {
     else if (form.role === 'buyer' && !isAddress(form.seller)) e.seller = 'That is not a valid address.';
     if (!open && !form.plug) e.plug = "Enter your plug's wallet address.";
     else if (!open && !plugAddr) e.plug = 'That is not a valid address.';
+
+    // Address poisoning: block any pasted address that mimics one this person has really used.
+    const known = knownAddresses(address);
+    const plugLookalike = !open && plugAddr ? lookalikeOf(plugAddr, known) : undefined;
+    if (plugLookalike) e.plug = lookalikeMessage(plugLookalike);
+    const sellerLookalike = form.role === 'buyer' && seller ? lookalikeOf(seller, known) : undefined;
+    if (sellerLookalike) e.seller = lookalikeMessage(sellerLookalike);
 
     if (seller && checkPlug && price !== undefined && level !== undefined) {
       const terms = {

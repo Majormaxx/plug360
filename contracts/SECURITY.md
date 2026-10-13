@@ -69,6 +69,15 @@ The invariant suite runs with `fail_on_revert`: the handler only makes calls tha
 - Order tags through Arc's Memo contract work only for transactions an ordinary wallet sends itself; the contract's own events carry the order ID for every wallet type.
 - A buyer who signs two early-release signatures before either is used must have them relayed in nonce order.
 
+## Address poisoning
+
+Bots watch Arc and send tiny USDC transfers from addresses that share the first and last characters of real ones, hoping someone copies the fake from their history. They hit this project's test wallets within seconds of real transactions. Defences:
+
+- The plug field only accepts listed plugs, so a look-alike plug address fails the listing check. A look-alike seller address cannot produce the real seller's signature, so the deal cannot be paid.
+- The refund address is the one field where a wrong paste would lose money. The app defaults it to the buyer's own wallet and blocks any address that matches a known address at both ends but differs in the middle. The same check runs on the plug and seller fields (`apps/web/src/lib/lookalike.ts`).
+- Addresses always show in full, grouped in fours. The app never shortens an address where someone has to compare it.
+- Deal state comes from `getDeal` and escrow events, never from balances. Anyone can send USDC to any address, the escrow included, so balances only ever count as "at least". A test fails if web code reads balances outside the funding and gas checks (`apps/web/test/balance-guard.test.ts`). The proof checker and the end-to-end run verify refunds and payouts through the escrow's own transfer logs, and treat stray dust in the escrow as sweepable excess.
+
 ## Leaving a deal without the website
 
 Every exit is a plain contract call. With Foundry's `cast` (or `arc-cast`) and the deal ID:
