@@ -84,6 +84,46 @@ describe('finalizeExpiredDispute', () => {
   });
 });
 
+describe('withdraw (auto payout)', () => {
+  it('pays the seller and plug once the window closes, and not before', async () => {
+    const { seller, plug } = fx.accounts;
+    const dealId = await fundDeal(fx, { price: parseUnits('20', 6), plugFee: parseUnits('1', 6), windowSeconds: 3 * DAY });
+    const sellerBefore = await usdcBalance(fx, seller.address);
+    const plugBefore = await usdcBalance(fx, plug.address);
+    const { k } = keeper({ autoPayout: true });
+
+    await k.tick();
+    expect((await getDeal(fx, dealId)).status).toBe(DealStatus.Held);
+
+    await warp(fx, 3 * DAY);
+    const report = await k.tick();
+    expect(report.actions.filter((a) => a.job === 'withdraw' && a.outcome === 'confirmed')).toHaveLength(1);
+    expect((await getDeal(fx, dealId)).status).toBe(DealStatus.Settled);
+    // Seller gets the price minus their half of the fee; the plug gets the whole fee.
+    expect((await usdcBalance(fx, seller.address)) - sellerBefore).toBe(parseUnits('19.5', 6));
+    expect((await usdcBalance(fx, plug.address)) - plugBefore).toBe(parseUnits('1', 6));
+
+    const again = await k.tick();
+    expect(again.actions.filter((a) => a.job === 'withdraw')).toHaveLength(0);
+  });
+
+  it('pays out a released deal immediately', async () => {
+    const dealId = await fundDeal(fx, { windowSeconds: 7 * DAY });
+    await write(fx, fx.accounts.buyer, 'release', [dealId]);
+    const { k } = keeper({ autoPayout: true });
+    await k.tick();
+    expect((await getDeal(fx, dealId)).status).toBe(DealStatus.Settled);
+  });
+
+  it('leaves deals alone when auto payout is off', async () => {
+    const dealId = await fundDeal(fx);
+    await write(fx, fx.accounts.buyer, 'release', [dealId]);
+    const { k } = keeper({ autoPayout: false });
+    await k.tick();
+    expect((await getDeal(fx, dealId)).status).toBe(DealStatus.Released);
+  });
+});
+
 describe('retryPayout', () => {
   it('pays a parked seller leg on the first tick after the seller is unblocked', async () => {
     const { seller, stranger } = fx.accounts;
@@ -184,6 +224,14 @@ describe('monitors', () => {
     const report = await k.tick();
     const owner = report.alerts.filter((a) => a.kind === 'owner-action').map((a) => (a.data as { event: string }).event);
     expect(owner).toEqual(['Paused', 'Unpaused', 'PlugLevelSet', 'OwnershipTransferStarted']);
+  });
+
+  it('warns once when the gas sponsor runs low', async () => {
+    const { k } = keeper({ sponsorAddress: '0x000000000000000000000000000000000000dEaD', minSponsorBalance: parseUnits('1', 18) });
+    const first = await k.tick();
+    expect(kinds(first.alerts)).toContain('low-sponsor');
+    const second = await k.tick();
+    expect(kinds(second.alerts)).not.toContain('low-sponsor');
   });
 
   it('warns when the keeper gas balance is below the threshold', async () => {

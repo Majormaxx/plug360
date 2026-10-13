@@ -41,6 +41,8 @@ export function keeperConfig(fx: Fixture, overrides: Partial<KeeperConfig> = {})
     minGasBalance: parseUnits('1', 18),
     receiptTimeoutMs: 10_000,
     deadlineWarningSeconds: DAY,
+    autoPayout: false,
+    minSponsorBalance: parseUnits('0.5', 18),
     ...overrides,
   };
 }

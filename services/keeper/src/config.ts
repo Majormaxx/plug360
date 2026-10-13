@@ -19,6 +19,11 @@ export type KeeperConfig = {
   receiptTimeoutMs: number;
   /** Warn about a dispute this many seconds before the plug's deadline. */
   deadlineWarningSeconds: number;
+  /** Pay out released deals and deals whose window closed, so sellers never need gas or a button press. */
+  autoPayout: boolean;
+  /** The gas sponsor's hot wallet; the keeper alerts when it runs low. */
+  sponsorAddress?: Address;
+  minSponsorBalance: bigint;
 };
 
 export class ConfigError extends Error {
@@ -99,6 +104,17 @@ export function loadConfig(env: Env = process.env): KeeperConfig {
     else issues.push('MIN_GAS_BALANCE_USDC must be a decimal USDC amount');
   }
 
+  let minSponsorBalance = parseUnits('0.5', 18);
+  const minSponsorRaw = str('MIN_SPONSOR_BALANCE_USDC');
+  if (minSponsorRaw !== undefined) {
+    if (/^\d+(\.\d{1,18})?$/.test(minSponsorRaw)) minSponsorBalance = parseUnits(minSponsorRaw, 18);
+    else issues.push('MIN_SPONSOR_BALANCE_USDC must be a decimal USDC amount');
+  }
+  const sponsorRaw = str('SPONSOR_ADDRESS');
+  if (sponsorRaw !== undefined && !isAddress(sponsorRaw)) issues.push('SPONSOR_ADDRESS must be an address');
+  const autoPayoutRaw = str('AUTO_PAYOUT');
+  if (autoPayoutRaw !== undefined && autoPayoutRaw !== 'true' && autoPayoutRaw !== 'false') issues.push('AUTO_PAYOUT must be true or false');
+
   const config: KeeperConfig = {
     rpcUrl: rpcUrl ?? '',
     chainId,
@@ -111,7 +127,10 @@ export function loadConfig(env: Env = process.env): KeeperConfig {
     minGasBalance,
     receiptTimeoutMs: int('RECEIPT_TIMEOUT_SECONDS', str('RECEIPT_TIMEOUT_SECONDS'), 30, 1) * 1000,
     deadlineWarningSeconds: int('DEADLINE_WARNING_SECONDS', str('DEADLINE_WARNING_SECONDS'), 86_400, 0),
+    autoPayout: autoPayoutRaw !== 'false',
+    minSponsorBalance,
   };
+  if (sponsorRaw !== undefined && isAddress(sponsorRaw)) config.sponsorAddress = getAddress(sponsorRaw);
   if (rpcFallbackUrl !== undefined) config.rpcFallbackUrl = rpcFallbackUrl;
   if (alertWebhookUrl !== undefined) config.alertWebhookUrl = alertWebhookUrl;
 

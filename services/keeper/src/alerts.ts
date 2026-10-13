@@ -12,6 +12,7 @@ export type Alert = {
     | 'payout-deferred'
     | 'dispute-deadline-near'
     | 'low-gas'
+    | 'low-sponsor'
     | 'gas-restored'
     | 'tick-failed';
   message: string;

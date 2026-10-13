@@ -17,7 +17,7 @@ export type TrackedDeal = {
   deadlineWarned?: boolean;
 };
 
-export type Job = 'finalizeExpiredDispute' | 'retryPayout';
+export type Job = 'finalizeExpiredDispute' | 'retryPayout' | 'withdraw';
 
 /** A transaction that was signed and broadcast but has no receipt yet. Replacements reuse the nonce. */
 export type PendingTx = {
@@ -40,7 +40,7 @@ export type KeeperState = {
   cursor: string;
   deals: Record<string, TrackedDeal>;
   pending: Record<string, PendingTx>;
-  flags: { insolvent: boolean; lowGas: boolean };
+  flags: { insolvent: boolean; lowGas: boolean; lowSponsor?: boolean };
 };
 
 export function initialState(chainId: number, escrow: Address, deployBlock: bigint): KeeperState {

@@ -195,6 +195,8 @@ export function createKeeper(config: KeeperConfig, deps: KeeperDeps = {}) {
     });
     const expired = (d: { status: number; disputedAt: number }) =>
       d.status === DealStatus.Disputed && now >= d.disputedAt + PLUG_WINDOW_SECONDS;
+    const payable = (d: { status: number; releaseAt: number }) =>
+      d.status === DealStatus.Released || (d.status === DealStatus.Held && now >= d.releaseAt);
     let halted = false;
 
     // 2. Settle transactions an earlier tick left without a receipt, before sending anything new.
@@ -205,7 +207,7 @@ export function createKeeper(config: KeeperConfig, deps: KeeperDeps = {}) {
         await refreshDeal(dealId);
         const d = state.deals[p.dealId];
         if (!d) return false;
-        return p.job === 'finalizeExpiredDispute' ? expired(d) : d.payoutPending;
+        return p.job === 'finalizeExpiredDispute' ? expired(d) : p.job === 'withdraw' ? payable(d) : d.payoutPending;
       });
       report.actions.push(result);
       if (result.outcome === 'confirmed' || result.outcome === 'reverted') await refreshDeal(dealId);
@@ -222,7 +224,18 @@ export function createKeeper(config: KeeperConfig, deps: KeeperDeps = {}) {
       if (result.halt) halted = true;
     }
 
-    // 4. Retry parked payout legs, with per-deal backoff.
+    // 4. Pay out deals the buyer or plug released, or whose money-back window closed with no dispute.
+    // withdraw is permissionless and only ever pays the seller and plug, so the keeper's gas does it for them.
+    for (const [id, d] of Object.entries(config.autoPayout ? state.deals : {})) {
+      if (halted) break;
+      if (!payable(d) || state.pending[pendingKey('withdraw', id)]) continue;
+      const result = await sender.execute('withdraw', BigInt(id));
+      report.actions.push(result);
+      await refreshDeal(BigInt(id));
+      if (result.halt) halted = true;
+    }
+
+    // 5. Retry parked payout legs, with per-deal backoff.
     const usdc = await readEscrow<Address>('USDC', 'USDC', []);
     for (const [id, d] of Object.entries(state.deals)) {
       if (halted) break;
@@ -272,7 +285,7 @@ export function createKeeper(config: KeeperConfig, deps: KeeperDeps = {}) {
       }
     }
 
-    // 5. Monitors.
+    // 6. Monitors.
     const [balance, held] = await Promise.all([
       pool.call('balanceOf', (c) => c.readContract({ address: usdc, abi: erc20Abi, functionName: 'balanceOf', args: [escrow], blockNumber: head })),
       readEscrow<bigint>('totalHeld', 'totalHeld', [], head),
@@ -304,6 +317,20 @@ export function createKeeper(config: KeeperConfig, deps: KeeperDeps = {}) {
       await alerts.emit({ severity: 'info', kind: 'gas-restored', message: 'keeper gas balance is above the threshold again', data: { balance: gas } });
     }
     state.flags.lowGas = lowGas;
+
+    if (config.sponsorAddress) {
+      const sponsorGas = await pool.call('sponsorBalance', (c) => c.getBalance({ address: config.sponsorAddress! }));
+      const low = sponsorGas < config.minSponsorBalance;
+      if (low && !state.flags.lowSponsor) {
+        await alerts.emit({
+          severity: 'warning',
+          kind: 'low-sponsor',
+          message: `gas sponsor ${config.sponsorAddress} has ${formatUnits(sponsorGas, 18)} USDC, below ${formatUnits(config.minSponsorBalance, 18)}`,
+          data: { address: config.sponsorAddress, balance: sponsorGas, threshold: config.minSponsorBalance },
+        });
+      }
+      state.flags.lowSponsor = low;
+    }
 
     for (const [id, d] of Object.entries(state.deals)) {
       if (d.status !== DealStatus.Disputed || d.deadlineWarned) continue;
