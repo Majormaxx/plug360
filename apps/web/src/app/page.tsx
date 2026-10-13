@@ -1,7 +1,9 @@
-import { ArrowDown, ArrowRight, Gavel, HandCoins, LockKey, Timer } from '@phosphor-icons/react/dist/ssr';
+import { ArrowDown, ArrowRight, CheckCircle, Gavel, HandCoins, LockKey, SealCheck, Timer } from '@phosphor-icons/react/dist/ssr';
 import { HeroCard } from '@/components/landing/HeroCard';
 import { ButtonLink } from '@/components/ui/Button';
 import { explorerAddress, network } from '@/lib/config';
+import { levelCap, MAX_LEVEL } from '@plug360/shared';
+import { usdc } from '@/lib/format';
 
 const STEPS = [
   { title: 'Agree the job', body: 'Write what needs doing, set a price, and name a plug: someone you both know and trust.' },
@@ -10,10 +12,24 @@ const STEPS = [
   { title: 'Release, or ask the plug', body: 'Happy? Release it. Not happy? Open a dispute before the window closes and the plug decides.' },
 ];
 
+const USE_CASES = [
+  { title: 'Logo for a small business', price: '25', window: '3-day money-back window' },
+  { title: 'Phone screen repair', price: '40', window: '1-day window after pickup' },
+  { title: 'Concert ticket resale', price: '60', window: 'Window runs past the show date' },
+  { title: 'Four maths tutoring sessions', price: '30', window: '7-day window' },
+];
+
+const PLUG_REQUEST =
+  'https://github.com/Majormaxx/plug360/issues/new?title=Plug%20listing%20request&body=Wallet%20address%3A%0ACommunity%20or%20group%20you%20referee%20for%3A%0ALargest%20deal%20size%20you%20expect%3A';
+
 const FAQ = [
   {
     q: "What's a plug?",
     a: "A friend or community lead both sides already trust. They only act when there's a dispute, and the contract limits them to two moves: refund the buyer, or pay the seller. They can't send the money anywhere else.",
+  },
+  {
+    q: 'What if the plug sides with the seller unfairly?',
+    a: "Their ruling is final, which is why the plug should be someone you both know. Be aware that a plug earns the full fee when the seller is paid and half of it when the buyer is refunded. Plugs are listed one at a time, and one who rules dishonestly can be removed for new deals. They can never take the money for themselves.",
   },
   {
     q: 'What does it cost?',
@@ -28,6 +44,10 @@ const FAQ = [
     a: 'Any wallet that runs in your browser, like Rabby or MetaMask, or the in-app browser of a mobile wallet. Plug360 adds the Arc network for you.',
   },
   {
+    q: 'How do I turn USDC into cash?',
+    a: 'Send it to an exchange that accepts USDC on the Arc network, sell it there and withdraw to your bank. The Add USDC page lists exchanges that support Arc today.',
+  },
+  {
     q: 'Has the contract been audited?',
     a: 'Not yet. Until it is, the contract caps each deal at 100 USDC and everything it holds at 2,500 USDC. The source is public and verified.',
   },
@@ -39,14 +59,14 @@ export default function Home() {
       <section className="grid min-h-[calc(100dvh-14rem)] items-center gap-12 pt-4 lg:grid-cols-[1.1fr_1fr] lg:gap-8">
         <div className="space-y-7">
           <p className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-sm text-muted">
-            <span className="size-1.5 rounded-full bg-mint" /> USDC escrow for gigs in your circle
+            <span className="size-1.5 rounded-full bg-mint" /> Escrow for gigs between people who know each other
           </p>
           <h1 className="font-display text-[2.75rem] font-semibold leading-[1.04] tracking-[-0.03em] text-balance sm:text-6xl lg:text-[4.25rem]">
             <span className="block">Pay for the gig.</span>
             <span className="block text-muted">Hold it till it&apos;s done.</span>
           </h1>
           <p className="max-w-[46ch] text-lg leading-relaxed text-muted">
-            Plug360 keeps the USDC in escrow while the work happens. If something goes wrong, a friend you both trust decides who gets it, and they can&apos;t keep it for themselves.
+            Paying someone you half-know means one of you goes first. With Plug360, neither of you has to. The buyer&apos;s USDC waits in escrow until the job is done, and if you disagree, a friend you both trust, your plug, makes the call.
           </p>
           <div className="flex flex-wrap gap-3">
             <ButtonLink href="/new" size="lg" icon={<ArrowRight weight="bold" className="size-4" />} className="flex-row-reverse">
@@ -56,6 +76,20 @@ export default function Home() {
               How it works
             </ButtonLink>
           </div>
+          <ul className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted">
+            <li className="inline-flex items-center gap-1.5">
+              <CheckCircle weight="fill" className="size-4 text-mint" />
+              <a href={`https://sourcify.dev/#/lookup/${network.escrow}`} target="_blank" rel="noreferrer" className="underline decoration-line-strong underline-offset-4 hover:text-ink">
+                Contract verified
+              </a>
+            </li>
+            <li className="inline-flex items-center gap-1.5">
+              <CheckCircle weight="fill" className="size-4 text-mint" /> 0% platform fee
+            </li>
+            <li className="inline-flex items-center gap-1.5">
+              <CheckCircle weight="fill" className="size-4 text-mint" /> Up to 100 USDC per deal
+            </li>
+          </ul>
         </div>
         <HeroCard />
       </section>
@@ -82,7 +116,7 @@ export default function Home() {
         <h2 className="max-w-[20ch] font-display text-3xl font-semibold tracking-tight md:text-4xl">Fair by design, enforced by the contract.</h2>
         <div className="grid gap-4 md:grid-cols-6">
           <Fact className="md:col-span-4" icon={<Gavel className="size-5" />} title="The plug referees. That's all.">
-            In a dispute, the plug picks between two outcomes the contract allows: money back to the buyer, or payment to the seller. There is no third option, so there&apos;s nothing to gain by ruling badly.
+            In a dispute, the contract gives the plug two choices: money back to the buyer, or payment to the seller. There is no option that sends the money to the plug or anyone else. That&apos;s why the plug should be someone you both trust.
           </Fact>
           <Fact className="md:col-span-2" icon={<Timer className="size-5" />} title="Silence refunds the buyer">
             If the plug doesn&apos;t rule within 7 days, the buyer gets everything back.
@@ -98,6 +132,53 @@ export default function Home() {
             .
           </Fact>
         </div>
+      </section>
+
+      <section className="space-y-8">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <h2 className="max-w-[18ch] font-display text-3xl font-semibold tracking-tight md:text-4xl">Made for the deals you already do.</h2>
+          <p className="max-w-[40ch] text-muted">Anything where one side pays and the other delivers later.</p>
+        </div>
+        <ul className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0">
+          {USE_CASES.map((u) => (
+            <li key={u.title} className="w-[72%] shrink-0 snap-start space-y-3 rounded-[20px] border border-line bg-surface p-5 md:w-auto">
+              <p className="tabular font-display text-2xl font-semibold">
+                {u.price}
+                <span className="ml-1 text-sm font-medium text-muted">USDC</span>
+              </p>
+              <p className="font-medium">{u.title}</p>
+              <p className="text-sm text-muted">{u.window}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section id="plugs" className="grid scroll-mt-24 gap-10 rounded-[28px] border border-line bg-surface p-6 sm:p-10 lg:grid-cols-[1.1fr_1fr] lg:items-center">
+        <div className="space-y-5">
+          <p className="inline-flex items-center gap-2 text-sm font-medium text-gold-ink">
+            <SealCheck weight="fill" className="size-4" /> For plugs
+          </p>
+          <h2 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">People already trust you to vouch. Get paid for it.</h2>
+          <p className="max-w-[48ch] leading-relaxed text-muted">
+            If people in your group chats already ask you who to trust, you&apos;re a plug. You earn up to 5% of every deal you referee, paid when the deal pays out, and most deals never need you at all.
+          </p>
+          <ButtonLink href={PLUG_REQUEST} target="_blank" rel="noreferrer" variant="ink" size="lg" icon={<ArrowRight weight="bold" className="size-4" />} className="flex-row-reverse">
+            Ask to be listed
+          </ButtonLink>
+          <p className="text-xs text-faint">Plugs are listed by hand while the contract is new. Your level sets the largest deal you can referee.</p>
+        </div>
+        <dl className="divide-y divide-line rounded-[20px] border border-line bg-bg">
+          {Array.from({ length: MAX_LEVEL }, (_, i) => i + 1).map((lvl) => (
+            <div key={lvl} className="flex items-center justify-between px-5 py-3.5">
+              <dt className="inline-flex items-center gap-2 text-sm font-medium">
+                <span className="inline-flex h-6 items-center gap-1 rounded-full bg-gold-soft px-2 text-xs text-gold-ink">
+                  <SealCheck weight="fill" className="size-3.5" /> Level {lvl}
+                </span>
+              </dt>
+              <dd className="tabular text-sm text-muted">deals up to {usdc(levelCap(lvl))} USDC</dd>
+            </div>
+          ))}
+        </dl>
       </section>
 
       <section className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr]">

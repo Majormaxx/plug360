@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Header } from '@/components/layout/Header';
 import { MobileNav } from '@/components/layout/MobileNav';
 import { Footer } from '@/components/layout/Footer';
+import { TestnetStrip } from '@/components/layout/TestnetStrip';
 import { NetworkBanner } from '@/components/wallet/NetworkBanner';
 import { Providers } from '@/components/providers/Providers';
 import { themeScript } from '@/components/providers/ThemeProvider';
@@ -18,6 +19,14 @@ export const metadata: Metadata = {
   description: 'Pay for gigs between friends in USDC. The money waits in escrow, and a friend you both trust settles any dispute.',
   applicationName: 'Plug360',
   robots: { index: true, follow: true },
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'),
+  openGraph: {
+    type: 'website',
+    siteName: 'Plug360',
+    title: 'Plug360: pay for the gig, hold it till it\'s done',
+    description: 'USDC escrow for deals between people who know each other. A friend you both trust settles any dispute.',
+  },
+  twitter: { card: 'summary_large_image' },
 };
 
 export const viewport: Viewport = {
@@ -39,6 +48,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="min-h-[100dvh] antialiased">
         <Providers>
           <div className="flex min-h-[100dvh] flex-col">
+            <TestnetStrip />
             <Header />
             <NetworkBanner />
             <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-4 sm:px-6 md:pb-16 md:pt-8">{children}</main>
