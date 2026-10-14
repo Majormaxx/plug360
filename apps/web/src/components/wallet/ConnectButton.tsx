@@ -21,6 +21,7 @@ import { useQuery } from '@tanstack/react-query';
 import { CIRCLE_CONNECTOR_ID } from '@/lib/circle/connector';
 import { circleEnabled } from '@/lib/circle/config';
 import { activate, loginErrorMessage } from '@/lib/circle/login';
+import { warmCircle } from '@/lib/circle/sdk';
 import { loadSession } from '@/lib/circle/session';
 import { CircleSignIn } from './CircleSignIn';
 
@@ -48,7 +49,13 @@ export function ConnectButton({ size = 'sm', label }: { size?: 'sm' | 'md' | 'lg
           <span className="tabular">{shortAddress(address)}</span>
         </Button>
       ) : (
-        <Button variant="ink" size={size} onClick={() => setOpen(true)} icon={circleEnabled ? <SignIn weight="bold" className="size-4" /> : <Wallet weight="bold" className="size-4" />}>
+        <Button
+          variant="ink"
+          size={size}
+          onClick={() => {
+            if (circleEnabled) warmCircle();
+            setOpen(true);
+          }} icon={circleEnabled ? <SignIn weight="bold" className="size-4" /> : <Wallet weight="bold" className="size-4" />}>
           {label}
         </Button>
       )}

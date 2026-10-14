@@ -10,6 +10,7 @@ export function isCancelled(err: { code?: number; message?: string } | undefined
 export function loginErrorMessage(err: unknown): string {
   // Circle's SDK rejects with plain strings ("Failed to receive deviceId") or code-only objects; keep the detail.
   console.error('[circle-login]', err);
+  if (typeof err === 'string' && /deviceId/i.test(err)) return "Couldn't reach Circle's sign-in service in time. Check your connection and try again.";
   if (typeof err === 'string') return `Sign-in failed: ${err}`;
   const e = err as { code?: number; message?: string; status?: number };
   if (isCancelled(e)) return 'Sign-in was cancelled.';

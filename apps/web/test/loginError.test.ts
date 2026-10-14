@@ -5,7 +5,11 @@ describe('loginErrorMessage', () => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
 
   it('keeps the text of string rejections from Circle', () => {
-    expect(loginErrorMessage('Failed to receive deviceId')).toBe('Sign-in failed: Failed to receive deviceId');
+    expect(loginErrorMessage('Something odd')).toBe('Sign-in failed: Something odd');
+  });
+
+  it('explains the device ID timeout in plain words', () => {
+    expect(loginErrorMessage('Failed to receive deviceId')).toMatch(/Couldn't reach Circle/);
   });
 
   it('shows the Circle code next to its message, or alone', () => {

@@ -8,7 +8,7 @@ import { network } from '../config';
 import { walletsApi, type WalletsApi } from './api';
 import { circleConfig } from './config';
 import { createCircleProvider } from './provider';
-import { getSdk, runChallenge } from './sdk';
+import { getDeviceId, getSdk, runChallenge } from './sdk';
 export { loginErrorMessage } from './errors';
 import { saveSession, type CircleSession } from './session';
 
@@ -37,23 +37,21 @@ const googleConfig = () => ({ clientId: circleConfig.googleClientId, redirectUri
 /** Starts Google sign-in. The page leaves for Google and comes back to resumeGoogleLogin. */
 export async function startGoogleLogin(): Promise<void> {
   loginStatus.set({ step: 'redirecting' });
-  const sdk = await getSdk();
-  const deviceId = await sdk.getDeviceId();
+  const deviceId = await getDeviceId();
   const tokens = await walletsApi('social-token', { deviceId });
   try {
     sessionStorage.setItem(PENDING, JSON.stringify({ ...tokens, returnTo: window.location.pathname + window.location.hash }));
   } catch {
     // Without storage the redirect cannot be resumed; Circle's callback below still covers same-page flows.
   }
-  await getSdk({ ...tokens, google: googleConfig() });
+  const sdk = await getSdk({ ...tokens, google: googleConfig() });
   await sdk.performLogin(SocialLoginProvider.GOOGLE);
 }
 
 /** Sends a one-time code to `email` and opens Circle's code window. Resolves when sign-in completes. */
 export async function startEmailLogin(email: string, publicClient: PublicClient): Promise<CircleSession> {
   loginStatus.set({ step: 'code' });
-  const sdk = await getSdk();
-  const deviceId = await sdk.getDeviceId();
+  const deviceId = await getDeviceId();
   const tokens = await walletsApi('email-token', { deviceId, email });
   const result = await new Promise<EmailLoginResult>((resolve, reject) => {
     const cb: LoginCompleteCallback = (error, r) => (error || !r ? reject(error ?? new Error('Sign-in failed')) : resolve(r));

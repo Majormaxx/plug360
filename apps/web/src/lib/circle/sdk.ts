@@ -5,6 +5,7 @@ import type { ChallengeCompleteCallback, LoginCompleteCallback, LoginConfigs } f
 import { circleConfig } from './config';
 import type { RunChallenge } from './provider';
 import { isCancelled } from './errors';
+import { rememberWithRetry } from './retry';
 import { ProviderRpcError } from './provider';
 
 let sdk: W3SSdk | undefined;
@@ -19,6 +20,22 @@ export async function getSdk(loginConfigs?: LoginConfigs, onLogin?: LoginComplet
 }
 
 export { isCancelled } from './errors';
+
+/**
+ * Circle's SDK gets a device ID from a hidden page on pw-auth.circle.com and gives up after 10 seconds,
+ * which slow connections can exceed. The ID is stable per browser, so fetch it once per visit, retry a
+ * timeout (the retry is faster because the browser has cached Circle's page), and start early via warmCircle.
+ */
+export const getDeviceId = rememberWithRetry(
+  async () => (await getSdk()).getDeviceId(),
+  3,
+  (attempt, err) => console.warn(`[circle-login] device ID attempt ${attempt} failed, retrying`, err),
+);
+
+/** Starts fetching the device ID ahead of a sign-in click. Errors are left for the click to report. */
+export function warmCircle(): void {
+  getDeviceId().catch(() => {});
+}
 
 /** Opens Circle's approval UI for a challenge and resolves with its outcome. */
 export const runChallenge: RunChallenge = async (auth, challengeId) => {
