@@ -1,0 +1,7 @@
+# Only the web app and its workspace packages are needed to build; contracts/deployments stays for the address book.
+contracts/lib
+contracts/out
+contracts/cache
+contracts/broadcast
+**/test-results
+**/.next
