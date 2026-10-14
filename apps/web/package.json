@@ -13,7 +13,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "brand": "node scripts/brand.mjs"
   },
   "dependencies": {
     "@circle-fin/w3s-pw-web-sdk": "1.1.11",

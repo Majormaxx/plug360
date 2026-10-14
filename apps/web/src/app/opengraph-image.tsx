@@ -1,4 +1,5 @@
 import { ImageResponse } from 'next/og';
+import { BRAND, GLYPH_RATIO, PLUG_PATH } from '@/lib/brand';
 
 export const alt = 'Plug360: pay for the gig, hold it till it’s done';
 export const size = { width: 1200, height: 630 };
@@ -11,7 +12,11 @@ export default function OpengraphImage() {
       <div style={{ width: '100%', height: '100%', display: 'flex', background: '#F6EFE4', padding: 72, fontFamily: 'sans-serif' }}>
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-            <div style={{ width: 64, height: 64, borderRadius: 32, background: '#F2663B' }} />
+            <div style={{ width: 64, height: 64, borderRadius: 32, background: BRAND.accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width={64 * GLYPH_RATIO} height={64 * GLYPH_RATIO} viewBox="0 0 256 256" style={{ transform: 'rotate(-45deg)' }}>
+                <path d={PLUG_PATH} fill={BRAND.ink} />
+              </svg>
+            </div>
             <div style={{ fontSize: 44, fontWeight: 700, color: '#17141F' }}>plug360</div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
