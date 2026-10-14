@@ -8,7 +8,8 @@ import { network } from '../config';
 import { walletsApi, type WalletsApi } from './api';
 import { circleConfig } from './config';
 import { createCircleProvider } from './provider';
-import { getSdk, isCancelled, runChallenge } from './sdk';
+import { getSdk, runChallenge } from './sdk';
+export { loginErrorMessage } from './errors';
 import { saveSession, type CircleSession } from './session';
 
 export type LoginStep = 'idle' | 'redirecting' | 'code' | 'signing-in' | 'creating' | 'activating' | 'done' | 'error';
@@ -139,13 +140,4 @@ export async function activate(session: CircleSession, publicClient: PublicClien
   })) as Hash;
   await publicClient.waitForTransactionReceipt({ hash, timeout: 90_000 });
   return hash;
-}
-
-export function loginErrorMessage(err: unknown): string {
-  const e = err as { code?: number; message?: string; status?: number };
-  if (isCancelled(e)) return 'Sign-in was cancelled.';
-  if (e?.status === 503) return 'Sign-in with Google or email is not set up yet.';
-  if (e?.status === 429) return 'Too many attempts. Wait a minute and try again.';
-  if (/insufficient|gas|balance/i.test(e?.message ?? '')) return 'Your new wallet needs a little USDC for its first transaction. Add some, then activate it from the wallet menu.';
-  return e?.message ?? 'Sign-in failed. Try again.';
 }

@@ -4,6 +4,7 @@ import type { W3SSdk } from '@circle-fin/w3s-pw-web-sdk';
 import type { ChallengeCompleteCallback, LoginCompleteCallback, LoginConfigs } from '@circle-fin/w3s-pw-web-sdk/dist/src/types';
 import { circleConfig } from './config';
 import type { RunChallenge } from './provider';
+import { isCancelled } from './errors';
 import { ProviderRpcError } from './provider';
 
 let sdk: W3SSdk | undefined;
@@ -17,11 +18,7 @@ export async function getSdk(loginConfigs?: LoginConfigs, onLogin?: LoginComplet
   return sdk;
 }
 
-/** Circle error codes and messages that mean the person closed or cancelled the approval window. */
-export function isCancelled(err: { code?: number; message?: string } | undefined): boolean {
-  if (!err) return false;
-  return err.code === 155140 || /cancel|closed|denied|reject/i.test(err.message ?? '');
-}
+export { isCancelled } from './errors';
 
 /** Opens Circle's approval UI for a challenge and resolves with its outcome. */
 export const runChallenge: RunChallenge = async (auth, challengeId) => {
