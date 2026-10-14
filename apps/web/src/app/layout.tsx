@@ -51,7 +51,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <TestnetStrip />
             <Header />
             <NetworkBanner />
-            <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-4 sm:px-6 md:pb-16 md:pt-8">{children}</main>
+            <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-16 pt-4 sm:px-6 md:pt-8">{children}</main>
             <Footer />
           </div>
           <MobileNav />
