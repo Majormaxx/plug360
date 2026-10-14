@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import type { PublicClient } from 'viem';
 import { useConnect, usePublicClient } from 'wagmi';
 import { CIRCLE_CONNECTOR_ID } from '@/lib/circle/connector';
-import { circleEnabled } from '@/lib/circle/config';
+import { circleConfig } from '@/lib/circle/config';
 import { loginErrorMessage, loginStatus, resumeGoogleLogin } from '@/lib/circle/login';
 
 /** Finishes a Google sign-in when Google sends the person back, then returns them to where they started. */
@@ -17,7 +17,7 @@ export function CircleResume() {
   const ran = useRef(false);
 
   useEffect(() => {
-    if (!circleEnabled || !publicClient || ran.current) return;
+    if (!circleConfig.googleEnabled || !publicClient || ran.current) return;
     ran.current = true;
     resumeGoogleLogin(publicClient)
       .then(async (r) => {

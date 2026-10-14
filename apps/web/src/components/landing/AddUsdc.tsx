@@ -58,8 +58,8 @@ export function AddUsdc() {
             </>
           ) : (
             <>
-              <p className="text-sm text-muted">Connect to see your address and balance.</p>
-              <ConnectButton size="lg" label="Connect wallet" />
+              <p className="text-sm text-muted">Sign in to see your address and balance.</p>
+              <ConnectButton size="lg" />
             </>
           )}
         </Panel>

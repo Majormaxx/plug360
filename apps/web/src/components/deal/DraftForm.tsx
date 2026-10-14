@@ -108,7 +108,7 @@ export function DraftForm() {
     if (!form.price) e.price = 'Enter a price.';
     if (form.role === 'buyer' && !form.seller) e.seller = "Enter the seller's wallet address.";
     else if (form.role === 'buyer' && !isAddress(form.seller)) e.seller = 'That is not a valid address.';
-    if (!open && !form.plug) e.plug = "Enter your plug's wallet address.";
+    if (!open && !form.plug) e.plug = "Choose your plug, or paste their address.";
     else if (!open && !plugAddr) e.plug = 'That is not a valid address.';
 
     // Address poisoning: block any pasted address that mimics one this person has really used.
@@ -243,13 +243,13 @@ export function DraftForm() {
           </Field>
 
           {form.role === 'buyer' && (
-            <Field label="Seller's wallet" error={show('seller')}>
+            <Field label="Who's doing the job?" error={show('seller')} hint="Paste the seller's wallet address. They can copy it from the account button at the top once they've signed in.">
               {({ id, describedBy, invalid }) => (
                 <Input
                   id={id}
                   aria-describedby={describedBy}
                   aria-invalid={invalid}
-                  placeholder="0x…"
+                  placeholder="Seller's address, 0x…"
                   className="font-mono text-[15px]"
                   spellCheck={false}
                   autoCapitalize="off"
@@ -264,8 +264,12 @@ export function DraftForm() {
           {youAreTheSellerToo && <Notice tone="warn" title="This is your own wallet">The seller has to be a different person from the buyer.</Notice>}
 
           <Field
-            label="Your plug"
-            hint={open ? "Send the link to your plug. They add their own wallet when they open it, and you check it's them before you sign." : "A friend you both trust. They only step in if there's a dispute, and they can never take the money for themselves."}
+            label="Your plug, the person in the middle"
+            hint={
+              open
+                ? "Send the link to your plug. They sign in when they open it, and you check it's them before you sign."
+                : 'Someone you both know and trust. They only step in if there is a dispute, and they can never take the money for themselves.'
+            }
           >
             {() => (
               <Segmented<PlugMode>
@@ -274,21 +278,22 @@ export function DraftForm() {
                 value={form.plugMode}
                 onChange={(plugMode) => set({ plugMode })}
                 options={[
-                  { value: 'known', label: 'I have their address' },
-                  { value: 'open', label: 'They add it' },
+                  { value: 'known', label: 'Choose my plug' },
+                  { value: 'open', label: 'Invite my plug' },
                 ]}
               />
             )}
           </Field>
           {!open && (
-            <Field label="Plug's wallet" error={show('plug')} aside={plugAddr ? <PlugCheck plug={plugAddr} /> : <QrScanButton onAddress={(a) => (set({ plug: a }), touch('plug'))} />}>
+            <Field label="Who's your plug?" error={show('plug')} aside={plugAddr ? <PlugCheck plug={plugAddr} /> : <QrScanButton onAddress={(a) => (set({ plug: a }), touch('plug'))} />}>
               {({ id, describedBy, invalid }) => (
                 <div className="space-y-2.5">
+                  <PlugPicker value={form.plug} {...(seller ? { exclude: seller } : {})} onPick={(a) => (set({ plug: a }), touch('plug'))} />
                   <Input
                     id={id}
                     aria-describedby={describedBy}
                     aria-invalid={invalid}
-                    placeholder="0x…"
+                    placeholder="Your plug's address, 0x…"
                     className="font-mono text-[15px]"
                     spellCheck={false}
                     autoCapitalize="off"
@@ -297,7 +302,6 @@ export function DraftForm() {
                     onChange={(e) => set({ plug: e.target.value.trim() })}
                     onBlur={() => touch('plug')}
                   />
-                  <PlugPicker value={form.plug} {...(seller ? { exclude: seller } : {})} onPick={(a) => (set({ plug: a }), touch('plug'))} />
                 </div>
               )}
             </Field>
@@ -354,8 +358,8 @@ export function DraftForm() {
           </ul>
           {needsWallet ? (
             <div className="space-y-2">
-              <p className="text-sm text-muted">Connect the wallet you want to be paid in.</p>
-              <ConnectButton size="lg" label="Connect wallet" />
+              <p className="text-sm text-muted">Sign in to create the deal. If you're the seller, you get paid to the account you sign in with.</p>
+              <ConnectButton size="lg" />
             </div>
           ) : (
             <Button type="submit" size="lg" className="w-full" disabled={submitted && !ready} icon={<ArrowRight weight="bold" className="size-4" />}>

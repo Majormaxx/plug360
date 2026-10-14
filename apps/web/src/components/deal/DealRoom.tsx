@@ -232,9 +232,9 @@ function Room({ draft, onUpdate }: { draft: Draft; onUpdate: (d: Draft) => void 
             <ButtonLink href={`/r/${dealIdToHex(dealId)}`} size="lg" className="w-full">Open the receipt</ButtonLink>
           ) : !address ? (
             <div className="space-y-3">
-              <p className="font-display text-lg font-semibold tracking-tight">Connect to continue</p>
-              <p className="text-sm text-muted">Connect the wallet that is part of this deal. The page will show what you need to do.</p>
-              <ConnectButton size="lg" label="Connect wallet" />
+              <p className="font-display text-lg font-semibold tracking-tight">Sign in to continue</p>
+              <p className="text-sm text-muted">Use the email or wallet that's part of this deal. The page then shows what you need to do.</p>
+              <ConnectButton size="lg" />
             </div>
           ) : open ? (
             role === 'seller' ? (

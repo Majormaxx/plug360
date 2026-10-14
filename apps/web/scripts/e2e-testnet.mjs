@@ -145,8 +145,11 @@ async function connect(page, name, address) {
   const mine = page.getByRole('button', { name: short });
   // wagmi may reconnect an already-authorized injected wallet a moment after load.
   if (await mine.waitFor({ timeout: 3_000 }).then(() => true, () => false)) return;
-  const either = page.getByRole('button', { name: /^Connect/ }).first();
+  const either = page.getByRole('button', { name: /^(Connect|Sign in)/ }).first();
   await either.click();
+  // With email sign-in on, wallet apps sit behind a fold.
+  const fold = page.getByRole('button', { name: /I already have a crypto wallet/ });
+  if (await fold.isVisible().catch(() => false)) await fold.click();
   await page.getByRole('button', { name: new RegExp(`Test wallet \\(${name}\\)`) }).click();
   await page.getByRole('button', { name: short }).waitFor();
 }
@@ -171,7 +174,7 @@ try {
   await seller.page.getByLabel("What's the job?").fill(`E2E ${new Date().toISOString().slice(0, 16)}`);
   await seller.page.getByLabel('Details').fill('Automated end-to-end run against Arc testnet.');
   await seller.page.getByLabel('Price').fill('2');
-  await seller.page.getByLabel("Plug's wallet").fill(plug.account.address);
+  await seller.page.getByLabel("Who's your plug?").fill(plug.account.address);
   await seller.page.getByText(/Level 1 plug/).waitFor();
   await seller.page.getByRole('radio', { name: '1 day' }).first().click();
   await seller.page.screenshot({ path: `${shots}01-new-mobile.png`, fullPage: true });
@@ -235,7 +238,7 @@ try {
   await seller.page.goto(`${base}/new`);
   await seller.page.getByLabel("What's the job?").fill(`E2E open seat ${new Date().toISOString().slice(0, 16)}`);
   await seller.page.getByLabel('Price').fill('2');
-  await seller.page.getByRole('radio', { name: 'They add it' }).click();
+  await seller.page.getByRole('radio', { name: 'Invite my plug' }).click();
   await seller.page.getByRole('radio', { name: '1 day' }).first().click();
   await seller.page.getByRole('button', { name: 'Create deal link' }).click();
   await seller.page.waitForURL(/\/deal#/);
@@ -286,7 +289,7 @@ try {
     await connect(smartSeller.page, 'smart-seller', smartAddr);
     await smartSeller.page.getByLabel("What's the job?").fill(`E2E smart wallet ${new Date().toISOString().slice(0, 16)}`);
     await smartSeller.page.getByLabel('Price').fill('1');
-    await smartSeller.page.getByLabel("Plug's wallet").fill(plug.account.address);
+    await smartSeller.page.getByLabel("Who's your plug?").fill(plug.account.address);
     await smartSeller.page.getByText(/Level 1 plug/).waitFor();
     await smartSeller.page.getByRole('button', { name: 'Create deal link' }).click();
     await smartSeller.page.waitForURL(/\/deal#/);
@@ -318,7 +321,7 @@ try {
     await seller.page.goto(`${base}/new`);
     await seller.page.getByLabel("What's the job?").fill(`E2E empty plug ${new Date().toISOString().slice(0, 16)}`);
     await seller.page.getByLabel('Price').fill('1');
-    await seller.page.getByLabel("Plug's wallet").fill(plug2.account.address);
+    await seller.page.getByLabel("Who's your plug?").fill(plug2.account.address);
     await seller.page.getByText(/Level 1 plug/).waitFor();
     await seller.page.getByRole('button', { name: 'Create deal link' }).click();
     await seller.page.waitForURL(/\/deal#/);

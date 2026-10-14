@@ -4,7 +4,9 @@ import { ButtonLink } from '@/components/ui/Button';
 import { explorerAddress, network } from '@/lib/config';
 import { levelCap, MAX_LEVEL } from '@plug360/shared';
 import { usdc } from '@/lib/format';
-import { circleEnabled } from '@/lib/circle/config';
+import { circleConfig, circleEnabled } from '@/lib/circle/config';
+
+const signInWith = [circleConfig.googleEnabled && 'Google', circleConfig.emailEnabled && 'your email'].filter(Boolean).join(' or ');
 
 const STEPS = [
   { title: 'Agree the job', body: 'Write what needs doing, set a price, and name a plug: someone you both know and trust.' },
@@ -44,14 +46,14 @@ const FAQ = [
     ? [
         {
           q: "I've never used crypto. Can I still use it?",
-          a: 'Yes. Sign in with Google and you get your own Arc wallet, secured by Circle. Only you can approve payments from it.',
+          a: `Yes. Sign in with ${signInWith} and you get your own Arc wallet, secured by Circle. Only you can approve payments from it.`,
         },
       ]
     : []),
   {
     q: 'Which wallets work?',
     a: circleEnabled
-      ? 'Sign in with Google for a wallet made for you, or use any wallet that runs in your browser, like Rabby or MetaMask. Plug360 adds the Arc network for you.'
+      ? `Sign in with ${signInWith} for a wallet made for you, or use any wallet that runs in your browser, like Rabby or MetaMask. Plug360 adds the Arc network for you.`
       : 'Any wallet that runs in your browser, like Rabby or MetaMask, or the in-app browser of a mobile wallet. Plug360 adds the Arc network for you.',
   },
   {

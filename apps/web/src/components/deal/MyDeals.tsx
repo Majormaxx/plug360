@@ -41,8 +41,8 @@ export function MyDeals() {
   if (!mounted || status === 'reconnecting') return <ListSkeleton />;
   if (!address) {
     return (
-      <EmptyState icon={<Stack className="size-5" />} title="See your deals" action={<ConnectButton size="lg" label="Connect wallet" />}>
-        Connect a wallet to list every deal it&apos;s part of, as buyer, seller or plug.
+      <EmptyState icon={<Stack className="size-5" />} title="See your deals" action={<ConnectButton size="lg" />}>
+        Sign in to see every deal you&apos;re part of, as buyer, seller or plug.
       </EmptyState>
     );
   }

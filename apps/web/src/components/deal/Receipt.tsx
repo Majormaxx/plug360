@@ -317,8 +317,8 @@ function Actions({ deal, id, view, role }: { deal: Deal; id: bigint; view: DealV
       <p className="font-display text-lg font-semibold tracking-tight">{view.final ? 'Nothing left to do' : 'What you can do'}</p>
       {!address && !view.final ? (
         <div className="space-y-3">
-          <p className="text-sm text-muted">Connect the wallet you used in this deal to see your options.</p>
-          <ConnectButton size="lg" label="Connect wallet" />
+          <p className="text-sm text-muted">Sign in with the email or wallet you used in this deal to see your options.</p>
+          <ConnectButton size="lg" />
         </div>
       ) : view.actions.length === 0 ? (
         <p className="text-sm leading-relaxed text-muted">

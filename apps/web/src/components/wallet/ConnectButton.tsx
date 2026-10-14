@@ -1,6 +1,6 @@
 'use client';
 
-import { SignOut, Wallet } from '@phosphor-icons/react';
+import { CaretDown, SignIn, SignOut, Wallet } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 import { useAccount, useConnect, useDisconnect, type Connector } from 'wagmi';
 import { network } from '@/lib/config';
@@ -31,7 +31,9 @@ function visibleConnectors(connectors: readonly Connector[]) {
   return named.length > 0 ? named : wallets;
 }
 
-export function ConnectButton({ size = 'sm', label = 'Connect' }: { size?: 'sm' | 'md' | 'lg'; label?: string }) {
+/** Opens sign-in. With Circle configured it reads "Sign in", since most people arrive without a wallet app. */
+export function ConnectButton({ size = 'sm', label }: { size?: 'sm' | 'md' | 'lg'; label?: string }) {
+  label ??= circleEnabled ? 'Sign in' : size === 'sm' ? 'Connect' : 'Connect wallet';
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const { address, status } = useAccount();
@@ -46,7 +48,7 @@ export function ConnectButton({ size = 'sm', label = 'Connect' }: { size?: 'sm' 
           <span className="tabular">{shortAddress(address)}</span>
         </Button>
       ) : (
-        <Button variant="ink" size={size} onClick={() => setOpen(true)} icon={<Wallet weight="bold" className="size-4" />}>
+        <Button variant="ink" size={size} onClick={() => setOpen(true)} icon={circleEnabled ? <SignIn weight="bold" className="size-4" /> : <Wallet weight="bold" className="size-4" />}>
           {label}
         </Button>
       )}
@@ -62,18 +64,24 @@ function ConnectPanel({ onDone }: { onDone: () => void }) {
   const list = visibleConnectors(connectors);
   const hasInjected = typeof window !== 'undefined' && 'ethereum' in window;
   const here = typeof window !== 'undefined' ? window.location.href.replace(/^https?:\/\//, '') : '';
+  // With email or Google sign-in available, wallet apps are the secondary path and start folded away.
+  const [showWallets, setShowWallets] = useState(!circleEnabled);
 
   return (
     <div className="space-y-4">
       {circleEnabled && (
         <>
           <CircleSignIn onDone={onDone} />
-          <div className="flex items-center gap-3 text-xs text-faint">
-            <span className="h-px flex-1 bg-line" /> or use a wallet app <span className="h-px flex-1 bg-line" />
-          </div>
+          <button type="button" aria-expanded={showWallets} onClick={() => setShowWallets((v) => !v)} className="press flex w-full items-center gap-3 text-xs text-faint hover:text-muted">
+            <span className="h-px flex-1 bg-line" />
+            <span className="inline-flex items-center gap-1">
+              I already have a crypto wallet <CaretDown className={`size-3 transition-transform duration-200 ${showWallets ? 'rotate-180' : ''}`} />
+            </span>
+            <span className="h-px flex-1 bg-line" />
+          </button>
         </>
       )}
-      {hasInjected || list.some((c) => c.id !== 'injected') ? (
+      {!showWallets ? null : hasInjected || list.some((c) => c.id !== 'injected') ? (
         <ul className="space-y-2">
           {list.map((c) => (
             <li key={c.uid}>
@@ -132,9 +140,11 @@ function ConnectPanel({ onDone }: { onDone: () => void }) {
           </div>
         </div>
       )}
-      <p className="text-xs leading-relaxed text-muted">
-        Plug360 never holds your keys. Your wallet asks before anything is signed or sent, and every payment goes straight to the escrow contract.
-      </p>
+      {showWallets && (
+        <p className="text-xs leading-relaxed text-muted">
+          Plug360 never holds your keys. Your wallet asks before anything is signed or sent, and every payment goes straight to the escrow contract.
+        </p>
+      )}
     </div>
   );
 }

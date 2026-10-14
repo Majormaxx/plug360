@@ -7,6 +7,7 @@ import { WagmiProvider } from 'wagmi';
 import { wagmiConfig } from '@/lib/wagmi';
 import { ThemeProvider, useTheme } from './ThemeProvider';
 import { CircleResume } from '../wallet/CircleResume';
+import { CircleLoginProgress } from '../wallet/CircleSignIn';
 
 function makeQueryClient() {
   return new QueryClient({
@@ -49,6 +50,7 @@ export function Providers({ children }: { children: ReactNode }) {
         <QueryClientProvider client={queryClient}>
           {children}
           <CircleResume />
+          <CircleLoginProgress />
           <ThemedToaster />
         </QueryClientProvider>
       </WagmiProvider>
