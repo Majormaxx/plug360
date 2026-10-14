@@ -31,6 +31,7 @@ import { FeeBreakdown } from './FeeBreakdown';
 import { PlugCheck } from './PlugCheck';
 import { PlugPicker } from './PlugPicker';
 import { QrScanButton } from './QrScan';
+import { NairaHint } from './NairaHint';
 import { rememberPlug } from '@/lib/storage';
 import { lookalikeOf } from '@/lib/lookalike';
 import { knownAddresses, lookalikeMessage } from '@/lib/knownAddresses';
@@ -224,7 +225,7 @@ export function DraftForm() {
         </Panel>
 
         <Panel className="space-y-5 p-5 sm:p-6">
-          <Field label="Price" error={show('price')} hint="At least 1 USDC. Your plug's level sets the maximum.">
+          <Field label="Price" error={show('price')} hint="At least 1 USDC. Your plug's level sets the maximum." aside={<NairaHint usdc={price === undefined ? undefined : Number(price) / 1e6} detail />}>
             {({ id, describedBy, invalid }) => (
               <Input
                 id={id}

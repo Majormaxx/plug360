@@ -20,6 +20,7 @@ import { prepareSigner } from '@/lib/sponsor';
 import { signerReadiness } from '@/lib/signers';
 import type { Hex } from 'viem';
 import { Amount } from '../ui/Amount';
+import { NairaHint } from './NairaHint';
 import { Button, ButtonLink } from '../ui/Button';
 import { Field, Input } from '../ui/Field';
 import { Notice } from '../ui/Notice';
@@ -145,6 +146,7 @@ export function PayPanel({ draft, dealId, disabled }: { draft: Draft; dealId: bi
       <div>
         <p className="text-sm text-muted">You pay</p>
         <Amount value={escrowed} className="font-display text-3xl font-semibold tracking-tight" />
+        <NairaHint usdc={Number(escrowed) / 1e6} detail className="mt-0.5 block" />
         {terms.plugFee > 0n && <p className="mt-0.5 text-sm text-muted">Includes your half of the plug fee.</p>}
       </div>
 
