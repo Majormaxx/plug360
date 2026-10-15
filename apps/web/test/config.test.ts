@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resolveNetwork } from '../src/lib/config';
 import deployment from '../../../contracts/deployments/5042002.json';
+import mainnet from '../../../contracts/deployments/5042.json';
 
 describe('resolveNetwork', () => {
   it('defaults to the committed testnet deployment', () => {
@@ -29,8 +30,15 @@ describe('resolveNetwork', () => {
     expect(n.rpcUrls).toEqual(['https://a.example', 'https://b.example']);
   });
 
-  it('refuses mainnet without an escrow address, and unknown chains', () => {
-    expect(() => resolveNetwork({ NEXT_PUBLIC_CHAIN_ID: '5042' })).toThrow(/NEXT_PUBLIC_ESCROW/);
+  it('uses the committed mainnet deployment on chain 5042', () => {
+    const n = resolveNetwork({ NEXT_PUBLIC_CHAIN_ID: '5042' });
+    expect(n.chain.id).toBe(5042);
+    expect(n.testnet).toBe(false);
+    expect(n.escrow.toLowerCase()).toBe(mainnet.escrow.toLowerCase());
+    expect(n.deployBlock).toBe(BigInt(mainnet.deployBlock));
+  });
+
+  it('refuses unknown chains and bad addresses', () => {
     expect(() => resolveNetwork({ NEXT_PUBLIC_CHAIN_ID: '1' })).toThrow();
     expect(() => resolveNetwork({ NEXT_PUBLIC_ESCROW: '0x123' })).toThrow();
   });

@@ -1,0 +1,8 @@
+{
+  "chainId": 5042,
+  "deployBlock": 26019786,
+  "deployedAt": 1792030391,
+  "escrow": "0xd173909Bc98DAf021669c56e5613Cd531903B0de",
+  "owner": "0xC3DBffe9bd7eFD25A6B9F2fB635673d0a8E9506A",
+  "usdc": "0x3600000000000000000000000000000000000000"
+}

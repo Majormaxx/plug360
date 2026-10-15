@@ -1,6 +1,7 @@
 import { ARC_MAINNET_ID, ARC_TESTNET_ID, arcMainnet, arcTestnet } from '@plug360/shared';
 import { getAddress, type Address, type Chain } from 'viem';
 import { z } from 'zod';
+import mainnetDeployment from '../../../../contracts/deployments/5042.json';
 import testnetDeployment from '../../../../contracts/deployments/5042002.json';
 
 type Network = {
@@ -15,9 +16,10 @@ type Network = {
   testnet: boolean;
 };
 
-/** Deployments committed in contracts/deployments. Mainnet joins this map when it is deployed. */
+/** Deployments committed in contracts/deployments. */
 const DEPLOYMENTS: Partial<Record<number, { escrow: string; deployBlock: number }>> = {
   [ARC_TESTNET_ID]: testnetDeployment,
+  [ARC_MAINNET_ID]: mainnetDeployment,
 };
 
 const DEFAULTS: Record<number, Omit<Network, 'escrow' | 'deployBlock'>> = {

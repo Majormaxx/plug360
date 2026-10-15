@@ -13,7 +13,9 @@ const DIRECTORY: Record<number, PlugEntry[]> = {
   [ARC_TESTNET_ID]: [
     { address: getAddress('0xc98AA1601B5c088EFc73Ae71706A10343a5c642c'), name: 'Plug360 test plug', note: 'For trying the app on testnet' },
   ],
-  [ARC_MAINNET_ID]: [],
+  [ARC_MAINNET_ID]: [
+    { address: getAddress('0x04381511E79B184ecA483a4BD271E8347E2B5CCC'), name: 'Plug360 team plug', note: 'Run by the Plug360 team while the first community plugs are listed' },
+  ],
 };
 
 export const listedPlugs: PlugEntry[] = DIRECTORY[network.chain.id] ?? [];
