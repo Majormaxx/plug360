@@ -28,8 +28,8 @@ Plug360 is built on Circle's stack end to end: the money is USDC, the settlement
 |---|---|---|
 | [Arc](https://www.arc.network) | Settlement layer for every deal. Gas is paid in USDC, so a deal needs no second token | Mainnet and testnet |
 | [USDC](https://www.circle.com/usdc) (native on Arc) | The only asset the escrow holds. Prices, plug fees, refunds and payouts are all USDC | Mainnet and testnet |
-| [User-Controlled Wallets](https://developers.circle.com/wallets/user-controlled) | Google sign-in creates a smart contract wallet per person (`@circle-fin/w3s-pw-web-sdk` in the app, `@circle-fin/user-controlled-wallets` on the server). Plug360 holds the API key but cannot move funds: every signature and payment is approved by the person with their PIN in Circle's window | Testnet; mainnet once Circle mainnet access is enabled |
-| [Gas Station](https://developers.circle.com/wallets/gas-station) | Pays network fees for those smart wallets, including their one-time activation | Testnet |
+| [User-Controlled Wallets](https://developers.circle.com/wallets/user-controlled) | Google sign-in creates a smart contract wallet per person (`@circle-fin/w3s-pw-web-sdk` in the app, `@circle-fin/user-controlled-wallets` on the server). Plug360 holds the API key but cannot move funds: every signature and payment is approved by the person with their PIN in Circle's window | Mainnet and testnet |
+| [Gas Station](https://developers.circle.com/wallets/gas-station) | Pays network fees for those smart wallets, including their one-time activation | Mainnet and testnet |
 | [Faucet](https://faucet.circle.com) | Test USDC for trying Plug360 on Arc testnet | Testnet |
 
 People who bring their own wallet (MetaMask, Rabby and others) are covered by Plug360's own gas sponsor ([`services/sponsor`](services/sponsor/)), which tops up gas only for calls the contract would accept.
