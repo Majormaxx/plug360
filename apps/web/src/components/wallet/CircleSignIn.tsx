@@ -1,12 +1,14 @@
 'use client';
 
-import { EnvelopeSimple, GoogleLogo } from '@phosphor-icons/react';
+import { ArrowClockwise, EnvelopeSimple, GoogleLogo } from '@phosphor-icons/react';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
 import type { PublicClient } from 'viem';
 import { useConnect, usePublicClient } from 'wagmi';
 import { CIRCLE_CONNECTOR_ID } from '@/lib/circle/connector';
 import { circleConfig } from '@/lib/circle/config';
+import { BLOCKED_FRAME_MESSAGE } from '@/lib/circle/errors';
+import { deviceCheck } from '@/lib/circle/sdk';
 import { loginErrorMessage, loginStatus, startEmailLogin, startGoogleLogin, type LoginStep } from '@/lib/circle/login';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Field';
@@ -25,8 +27,14 @@ export const STEP_TEXT: Partial<Record<LoginStep, string>> = {
  * Circle's code and PIN windows are iframes, and a modal <dialog> always paints above them, so the
  * sheet closes as soon as sign-in starts and CircleLoginProgress reports progress from then on.
  */
-export function CircleSignIn({ onDone }: { onDone: () => void }) {
+export function CircleSignIn({ onDone, onBlocked }: { onDone: () => void; onBlocked?: () => void }) {
   const status = useSyncExternalStore(loginStatus.subscribe, loginStatus.get, loginStatus.get);
+  const device = useSyncExternalStore(deviceCheck.subscribe, deviceCheck.get, () => 'idle' as const);
+  const blocked = device === 'blocked';
+  // A blocked browser can still sign in with a wallet app, so open that path for them.
+  useEffect(() => {
+    if (blocked) onBlocked?.();
+  }, [blocked, onBlocked]);
   const publicClient = usePublicClient() as PublicClient | undefined;
   const { connectors, connectAsync } = useConnect();
   const [email, setEmail] = useState('');
@@ -35,7 +43,8 @@ export function CircleSignIn({ onDone }: { onDone: () => void }) {
   const fail = (err: unknown) => {
     const message = loginErrorMessage(err);
     loginStatus.set({ step: 'error', message });
-    toast.error(message);
+    // The blocked-browser case gets its own inline guidance below; a toast would only repeat it.
+    if (message !== BLOCKED_FRAME_MESSAGE) toast.error(message);
   };
 
   async function connectCircle() {
@@ -64,7 +73,24 @@ export function CircleSignIn({ onDone }: { onDone: () => void }) {
           </Button>
         </form>
       )}
-      {circleConfig.googleEnabled && (
+      {circleConfig.googleEnabled && blocked && (
+        <Notice
+          tone="warn"
+          title="Google sign-in is blocked in this browser"
+          action={
+            <Button size="sm" variant="ink" icon={<ArrowClockwise weight="bold" className="size-4" />} onClick={() => window.location.reload()}>
+              Reload
+            </Button>
+          }
+        >
+          <ol className="mt-1 list-decimal space-y-0.5 pl-4">
+            <li>Click the eye icon in the address bar (Chrome) or open this site&apos;s privacy settings.</li>
+            <li>Allow third-party cookies for plug360.xyz.</li>
+            <li>Reload and sign in again, or use a crypto wallet below.</li>
+          </ol>
+        </Notice>
+      )}
+      {circleConfig.googleEnabled && !blocked && (
         <Button size="lg" variant={circleConfig.emailEnabled ? 'soft' : 'ink'} className="w-full" disabled={busy} icon={<GoogleLogo weight="bold" className="size-5" />} onClick={() => startGoogleLogin().catch(fail)}>
           Continue with Google
         </Button>
@@ -74,7 +100,7 @@ export function CircleSignIn({ onDone }: { onDone: () => void }) {
           {STEP_TEXT[status.step]}…
         </p>
       )}
-      {status.step === 'error' && status.message && <Notice tone="danger" title={status.message} />}
+      {status.step === 'error' && status.message && status.message !== BLOCKED_FRAME_MESSAGE && <Notice tone="danger" title={status.message} />}
       <p className="text-xs leading-relaxed text-muted">
         No app or crypto needed. Signing in creates an Arc wallet that only you can approve payments from, secured by Circle.
       </p>

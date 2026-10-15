@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { rememberWithRetry } from '../src/lib/circle/retry';
+import { rememberWithRetry, withTimeout } from '../src/lib/circle/retry';
 
 describe('rememberWithRetry', () => {
   it('retries a failure and returns the first success', async () => {
@@ -25,5 +25,19 @@ describe('rememberWithRetry', () => {
     expect(fn).toHaveBeenCalledTimes(3);
     fn.mockResolvedValueOnce('dev-2');
     expect(await get()).toBe('dev-2');
+  });
+});
+
+describe('withTimeout', () => {
+  it('rejects a call that never settles', async () => {
+    vi.useFakeTimers();
+    const hung = withTimeout(new Promise<string>(() => {}), 12_000, 'Failed to receive deviceId');
+    vi.advanceTimersByTime(12_000);
+    await expect(hung).rejects.toBe('Failed to receive deviceId');
+    vi.useRealTimers();
+  });
+
+  it('passes a result through when it arrives in time', async () => {
+    expect(await withTimeout(Promise.resolve('dev-1'), 1_000, 'late')).toBe('dev-1');
   });
 });

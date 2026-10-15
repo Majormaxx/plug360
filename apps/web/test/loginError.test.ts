@@ -8,8 +8,8 @@ describe('loginErrorMessage', () => {
     expect(loginErrorMessage('Something odd')).toBe('Sign-in failed: Something odd');
   });
 
-  it('explains the device ID timeout in plain words', () => {
-    expect(loginErrorMessage('Failed to receive deviceId')).toMatch(/Couldn't reach Circle/);
+  it("tells people to allow third-party cookies when Circle's device check is blocked", () => {
+    expect(loginErrorMessage('Failed to receive deviceId')).toMatch(/third-party cookies for plug360\.xyz/);
   });
 
   it('shows the Circle code next to its message, or alone', () => {

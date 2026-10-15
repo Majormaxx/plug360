@@ -5,7 +5,7 @@ import type { ChallengeCompleteCallback, LoginCompleteCallback, LoginConfigs } f
 import { circleConfig } from './config';
 import type { RunChallenge } from './provider';
 import { isCancelled } from './errors';
-import { rememberWithRetry } from './retry';
+import { rememberWithRetry, withTimeout } from './retry';
 import { ProviderRpcError } from './provider';
 
 let sdk: W3SSdk | undefined;
@@ -22,17 +22,48 @@ export async function getSdk(loginConfigs?: LoginConfigs, onLogin?: LoginComplet
 export { isCancelled } from './errors';
 
 /**
- * Circle's SDK gets a device ID from a hidden page on pw-auth.circle.com and gives up after 10 seconds,
- * which slow connections can exceed. The ID is stable per browser, so fetch it once per visit, retry a
- * timeout (the retry is faster because the browser has cached Circle's page), and start early via warmCircle.
+ * Circle's SDK gets a device ID from a hidden page on pw-auth.circle.com and gives up after 10 seconds.
+ * Slow connections can exceed that, and browsers that block third-party cookies stop the page from
+ * answering at all. The ID is stable per browser, so fetch it once per visit, retry one timeout (the retry
+ * is faster because Circle's page is cached by then), and start early via warmCircle.
  */
-export const getDeviceId = rememberWithRetry(
-  async () => (await getSdk()).getDeviceId(),
-  3,
+const fetchDeviceId = rememberWithRetry(
+  // Circle's own 10s timer is skipped if its page answers with anything else, which can leave the call
+  // hanging forever in a blocked browser, so every attempt gets a hard limit of its own.
+  async () => withTimeout((async () => (await getSdk()).getDeviceId())(), 12_000, 'Failed to receive deviceId'),
+  2,
   (attempt, err) => console.warn(`[circle-login] device ID attempt ${attempt} failed, retrying`, err),
 );
 
-/** Starts fetching the device ID ahead of a sign-in click. Errors are left for the click to report. */
+/** Where the device check stands for this visit. Kept in memory only, so a reload checks again. */
+export type DeviceCheck = 'idle' | 'checking' | 'ready' | 'blocked';
+let check: DeviceCheck = 'idle';
+const checkListeners = new Set<() => void>();
+export const deviceCheck = {
+  get: () => check,
+  subscribe(fn: () => void) {
+    checkListeners.add(fn);
+    return () => checkListeners.delete(fn);
+  },
+};
+const setCheck = (next: DeviceCheck) => {
+  check = next;
+  checkListeners.forEach((l) => l());
+};
+
+export async function getDeviceId(): Promise<string> {
+  if (check !== 'ready' && check !== 'blocked') setCheck('checking');
+  try {
+    const id = await fetchDeviceId();
+    setCheck('ready');
+    return id;
+  } catch (err) {
+    setCheck('blocked');
+    throw err;
+  }
+}
+
+/** Starts the device check when sign-in opens, so a blocked browser is known before anyone clicks. */
 export function warmCircle(): void {
   getDeviceId().catch(() => {});
 }

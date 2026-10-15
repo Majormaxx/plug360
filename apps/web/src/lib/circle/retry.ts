@@ -23,3 +23,14 @@ export function rememberWithRetry<T>(fn: () => Promise<T>, attempts: number, onR
     return pending;
   };
 }
+
+/** Rejects with `message` if `promise` has not settled within `ms`. */
+export function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(message), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}

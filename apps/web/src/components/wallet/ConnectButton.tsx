@@ -1,7 +1,7 @@
 'use client';
 
 import { CaretDown, SignIn, SignOut, Wallet } from '@phosphor-icons/react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAccount, useConnect, useDisconnect, type Connector } from 'wagmi';
 import { network } from '@/lib/config';
 import { shortAddress } from '@/lib/format';
@@ -73,12 +73,13 @@ function ConnectPanel({ onDone }: { onDone: () => void }) {
   const here = typeof window !== 'undefined' ? window.location.href.replace(/^https?:\/\//, '') : '';
   // With email or Google sign-in available, wallet apps are the secondary path and start folded away.
   const [showWallets, setShowWallets] = useState(!circleEnabled);
+  const openWallets = useCallback(() => setShowWallets(true), []);
 
   return (
     <div className="space-y-4">
       {circleEnabled && (
         <>
-          <CircleSignIn onDone={onDone} />
+          <CircleSignIn onDone={onDone} onBlocked={openWallets} />
           <button type="button" aria-expanded={showWallets} onClick={() => setShowWallets((v) => !v)} className="press flex w-full items-center gap-3 text-xs text-faint hover:text-muted">
             <span className="h-px flex-1 bg-line" />
             <span className="inline-flex items-center gap-1">
