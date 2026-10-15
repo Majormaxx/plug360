@@ -1,66 +1,106 @@
 # Plug360
 
-Escrow for small USDC deals on Arc, with a mutual friend as referee. Funds sit in a contract the referee cannot draw from; in a dispute, the referee's only choices are a refund to the buyer's fixed address or payment to the seller.
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE) [![Network: Arc mainnet](https://img.shields.io/badge/Arc-mainnet-F2663B.svg)](https://explorer.arc.io/address/0xd173909Bc98DAf021669c56e5613Cd531903B0de) [![Contract verified](https://img.shields.io/badge/source-verified%20on%20Sourcify-3BB273.svg)](https://sourcify.dev/#/lookup/0xd173909Bc98DAf021669c56e5613Cd531903B0de)
 
-Status: in development. The contract is unaudited and capped at 100 USDC per deal and 2,500 USDC held in total.
+Plug360 is USDC escrow on Arc for small deals between people who know each other, with a mutual friend (the "plug") as referee. Informal deals today run on trust, so one side pays first and hopes; Plug360 locks the buyer's USDC in a contract until the job is done, and the plug can settle a dispute only by refunding the buyer or paying the seller, never by taking the money.
 
-## Layout
+**Live app:** [plug360.xyz](https://plug360.xyz)
 
-| Path | What it is | Status |
-|---|---|---|
-| [`contracts/`](contracts/) | `DealEscrow` (Foundry): the escrow, its unit, invariant and Arc fork tests, deploy, admin and proof scripts | Complete; live on Arc testnet |
-| [`packages/shared/`](packages/shared/) | ABI, chain config, EIP-712 types and the funding rules, checked against the deployed contract | Complete |
-| [`services/keeper/`](services/keeper/) | Pays out finished deals, refunds buyers when a plug misses the 7-day deadline, retries parked payouts, and alerts on solvency, owner actions and low gas | Complete; ran against the testnet deployment |
-| [`services/sponsor/`](services/sponsor/) | Gas sponsor: deploys smart wallets from ERC-6492 signatures and covers gas for the deal party who must act | Complete; proven on Arc testnet |
-| [`services/wallets/`](services/wallets/) | Google and email sign-in through Circle user-controlled wallets | Built; waiting on Circle credentials for live verification |
-| [`packages/testkit/`](packages/testkit/) | Test helpers: local chain, contract deployment, an RPC proxy that behaves like Arc's | Test-only |
-| [`apps/web/`](apps/web/) | The deal room: create, sign, pay, dispute and settle deals from a phone or desktop | Complete; end-to-end tested against the testnet deployment |
+## How a deal works
 
-## Arc testnet deployment
+1. The seller (or buyer) writes the job, sets a price and names a plug. The terms travel in a single link.
+2. The seller signs the terms, then the plug accepts. Signing is free and nothing moves yet.
+3. The buyer pays from the same link. The USDC sits in `DealEscrow` while the work is done.
+4. The buyer releases the money, or opens a dispute before the money-back window closes. The plug rules within 7 days; if they stay silent, anyone can trigger a full refund.
 
-| Item | Value |
+Platform fee is zero. The plug fee is set per deal, capped at 5% of the price and split evenly between buyer and seller.
+
+## Status and audit
+
+| | |
 |---|---|
-| DealEscrow | [`0x3df58eFFC292D5043075d71e6705dF6b7348171D`](https://explorer.testnet.arc.io/address/0x3df58eFFC292D5043075d71e6705dF6b7348171D) |
-| Source | Verified on [Sourcify](https://sourcify.dev/#/lookup/0x3df58eFFC292D5043075d71e6705dF6b7348171D) (creation and runtime bytecode match) |
-| Chain | Arc testnet, chain ID 5042002, deployed in block 66,562,861 |
-| Owner | `0x6FcCB3cf837a490A5dB9112770d46e395EeA88c9` (testnet key; mainnet uses a separate owner) |
+| Audit | Not audited. Internal review only: Slither with no medium or high findings, invariant and mutation testing ([SECURITY.md](contracts/SECURITY.md)) |
+| Limits | 100 USDC per deal (lower per plug level), 2,500 USDC owed by the contract in total |
+| Mainnet | Live since 15 October 2026. Every money path run once with real USDC; 20 of 20 receipts succeeded and the escrow ended owing nothing |
+| Ownership | Single owner key for launch week; moving to a multisig is the next operations task |
 
-Every money path, run once with real testnet transactions (`make proofs`, checked on-chain with `script/check-proofs.sh`). All receipts succeeded and the escrow ended holding nothing.
+## Deployments
+
+| Network | DealEscrow | Deploy block | Source |
+|---|---|---|---|
+| Arc mainnet (5042) | [`0xd173909Bc98DAf021669c56e5613Cd531903B0de`](https://explorer.arc.io/address/0xd173909Bc98DAf021669c56e5613Cd531903B0de) | 26,019,786 | [Sourcify](https://sourcify.dev/#/lookup/0xd173909Bc98DAf021669c56e5613Cd531903B0de) |
+| Arc testnet (5042002) | [`0x3df58eFFC292D5043075d71e6705dF6b7348171D`](https://explorer.testnet.arc.io/address/0x3df58eFFC292D5043075d71e6705dF6b7348171D) | 66,562,861 | [Sourcify](https://sourcify.dev/#/lookup/0x3df58eFFC292D5043075d71e6705dF6b7348171D) |
+
+Both use Arc's native USDC (`0x3600000000000000000000000000000000000000`). Addresses and deploy blocks are committed in [`contracts/deployments/`](contracts/deployments/); check the address before you pay.
+
+### Mainnet proof run
+
+Paths: canary is a 1 USDC deal the seller sends back; P1 the seller refunds; P2 the buyer disputes and the plug refunds the buyer; P3 the plug rejects the dispute and the seller is paid; P4 the buyer signs an early release that someone else relays; P5 a deal with no money-back window pays out at once. Re-check it any time with `script/check-proofs.sh`. The testnet run is in [`5042002-proofs.json`](contracts/deployments/5042002-proofs.json).
 
 | Path | Step | Transaction | Result |
 |---|---|---|---|
-| setup | buyer approves escrow | [0xa7494580...](https://explorer.testnet.arc.io/tx/0xa7494580ca59da5474c291aa83614d54dfc1c34c307d3b3d8cde3dd2074e6937) | ok |
-| canary | buyer pays | [0x883fffba...](https://explorer.testnet.arc.io/tx/0x883fffba053f878e4034b5ef10bb9226e2776bff0e1b8483d01c77ffa6db091c) | ok |
-| canary | seller sends it back | [0x0aa09bbf...](https://explorer.testnet.arc.io/tx/0x0aa09bbfa712fc9b1814e6f5723befbed31d90f9b165fd781ae369c8886c1f39) | ok |
-| P1 | buyer pays | [0x28f55e7b...](https://explorer.testnet.arc.io/tx/0x28f55e7b28b2345a2e1f733ea802c345a19367de6f3c9659ac2cd70c52e12d0d) | ok |
-| P1 | seller sends it back | [0xbd09f693...](https://explorer.testnet.arc.io/tx/0xbd09f693a922c99d2545a4bd8eb2d60d10653ee55172297cc165b58b61b4b895) | ok |
-| P2 | buyer pays | [0xffc89a2f...](https://explorer.testnet.arc.io/tx/0xffc89a2f3b1389640a748f03a0c6d8702a4ccb5d7833d5060f2bba4065008bd0) | ok |
-| P2 | buyer disputes | [0xa745ed41...](https://explorer.testnet.arc.io/tx/0xa745ed418a908eafe878f920d73e9ee2d6f0b4c60ff46d2f321b6f89e701b5d5) | ok |
-| P2 | plug rules for the buyer | [0x3ae2f6df...](https://explorer.testnet.arc.io/tx/0x3ae2f6dff9d4aed592266cb97a9085da60a101e063d65bf2b740bba9d19c2bea) | ok |
-| P3 | buyer pays | [0x660f25a6...](https://explorer.testnet.arc.io/tx/0x660f25a65c17776056d0c271d07afe8a144067d3c1ff99a254c77a51792d014f) | ok |
-| P3 | buyer disputes | [0x542ce5c6...](https://explorer.testnet.arc.io/tx/0x542ce5c6804059e5aa63fa8848a757501488cdd54a117306fe522701c89fc75e) | ok |
-| P3 | plug rejects the dispute | [0xf5b11e00...](https://explorer.testnet.arc.io/tx/0xf5b11e009107c63b6c9a930b7d0ecb9d301fd67687034e8e3d7a3c361feef1cd) | ok |
-| P3 | payout | [0x8c85f701...](https://explorer.testnet.arc.io/tx/0x8c85f701f7b4fcf1c129914c4accbe4630f596d0100dd17b7af8559682fb63ad) | ok |
-| P4 | buyer pays | [0xe0787853...](https://explorer.testnet.arc.io/tx/0xe078785353b2dd7ad57b891050a8f52c596e8596b711d09b4664b1033e5d2209) | ok |
-| P4 | signed release, relayed | [0x75b0d61b...](https://explorer.testnet.arc.io/tx/0x75b0d61b599f2990d1663dc160406f31bd1f152e2c233150741e761e637937f1) | ok |
-| P4 | payout | [0x9682778f...](https://explorer.testnet.arc.io/tx/0x9682778f715f02adce8dedb0316d93a16252ab299e1f9c93567c19f4fd0c9244) | ok |
-| P5 | buyer pays | [0xdaca6ac7...](https://explorer.testnet.arc.io/tx/0xdaca6ac771a2cb920281f90bc623c7d1ddbbc79d88881a0ecac94fac01498f61) | ok |
-| P5 | payout | [0xf851e9aa...](https://explorer.testnet.arc.io/tx/0xf851e9aa444eec19f616b00bd67aca5f1b64597d8b097616a566accb3aac23a5) | ok |
+| setup | buyer approves escrow | [0x9b324acf...](https://explorer.arc.io/tx/0x9b324acfd783f6dbb8c7fe7a870020b71de0772465f798061c87880b7567dca0) | ok |
+| canary | buyer pays | [0x60958251...](https://explorer.arc.io/tx/0x60958251bf1317e5786ef6d0d45527e3b80b1f5241af58a0942a4c447c8cf7af) | ok |
+| canary | seller sends it back | [0xe9596ccc...](https://explorer.arc.io/tx/0xe9596ccc0d1630189543c19c7a56d635fb953bbe5db73e5f8ff86454a440eeca) | ok |
+| P1 | buyer pays | [0xd5a3468b...](https://explorer.arc.io/tx/0xd5a3468b247cbd9e4cd07b8fec7721c5aa8e5ec599010d2fb59b929a9b5717c8) | ok |
+| P1 | seller sends it back | [0x4de21a9e...](https://explorer.arc.io/tx/0x4de21a9ebe162dc595ec4c1092bf04bce6b7108738a1575a6e591947ce176d36) | ok |
+| P2 | buyer pays | [0xaf6bdb3e...](https://explorer.arc.io/tx/0xaf6bdb3e367d5dabe9075dd312138d8a0f2a808dcfac9fec86f24b76fc9445db) | ok |
+| P2 | buyer disputes | [0x3f2fb627...](https://explorer.arc.io/tx/0x3f2fb627c1c972c4c9c3a42855ce1cebe1fa6b57a0253af17fb7b3b9c1866b56) | ok |
+| P2 | plug rules for the buyer | [0xd26a8421...](https://explorer.arc.io/tx/0xd26a8421c0601084629aa3dd57962b767bb2eeda57036f74b0e9ec177a637b7f) | ok |
+| P3 | buyer pays | [0x39ae3da9...](https://explorer.arc.io/tx/0x39ae3da9d379d704f395b182428824ce9dcaf538a6c497fc080f7106be00679f) | ok |
+| P3 | buyer disputes | [0x79ee3a23...](https://explorer.arc.io/tx/0x79ee3a23a76650565bda973382fad466ea8366bd449f6ccf05976ad0ba4590ff) | ok |
+| P3 | plug rejects the dispute | [0x05287a46...](https://explorer.arc.io/tx/0x05287a4667447fb8731e9ab17d89465a523563b34c0fb120860f4cb6754b12c8) | ok |
+| P3 | payout | [0x1524d2b9...](https://explorer.arc.io/tx/0x1524d2b93762e0ffd745baffcb31a30ac3ac7b380eb18b54000262f6d6d6658f) | ok |
+| P3 | seller returns the payout (capital reuse) | [0xbc6a6803...](https://explorer.arc.io/tx/0xbc6a68034d7c0e4747bde4bc3d4eda3642db4bf597007219222f83e569345296) | ok |
+| P4 | buyer pays | [0x9d35c4e9...](https://explorer.arc.io/tx/0x9d35c4e98ea5fa06e883f3a9ac29fc75551c9597485d8cd7c0d496b433e01e23) | ok |
+| P4 | signed release, relayed | [0xe8ddd2f1...](https://explorer.arc.io/tx/0xe8ddd2f1cfb00d9b1c475a7db3070fe6bac653030d09cc7cca73266bbfa0f2ed) | ok |
+| P4 | payout | [0x6c7829ba...](https://explorer.arc.io/tx/0x6c7829ba65c3a897406f7cda46bc8792e8177cad5428bce304d248c0bcf34406) | ok |
+| P4 | seller returns the payout (capital reuse) | [0x0bb7ac57...](https://explorer.arc.io/tx/0x0bb7ac57cde7f75abed00f18b261eec36aecce23c34d1fb3b6b25d89504973e9) | ok |
+| P5 | buyer pays | [0x40144465...](https://explorer.arc.io/tx/0x401444652723f7f56668a9d36f0f23cb043c5f1e159a6230474c533b9832f077) | ok |
+| P5 | payout | [0x37588f6f...](https://explorer.arc.io/tx/0x37588f6fff26d5adca1d98cf0a5cc6dc69f6496329bc5c278931a9238ceb5466) | ok |
+| P5 | seller returns the payout (capital reuse) | [0x54101948...](https://explorer.arc.io/tx/0x541019480132e303a7bda9d22f5eaa37702c620691173891d7206264890f28ca) | ok |
 
-Paths: canary is a 1 USDC deal the seller sends back; P1 the seller sends the money back; P2 the buyer disputes and the plug refunds the buyer; P3 the plug rejects the dispute and the seller is paid; P4 the buyer signs an early release that someone else relays; P5 a deal with no money-back window pays out at once.
+## Architecture
 
-## Development
+| Component | Role |
+|---|---|
+| [`contracts/`](contracts/) | `DealEscrow` (Foundry): holds funded deals and pays only the addresses fixed at funding. Unit, fuzz, invariant and Arc fork tests; deploy, admin and proof scripts |
+| [`apps/web/`](apps/web/) | The deal room (Next.js): create, sign, pay, dispute and settle from a phone. Shows a live naira equivalent next to USDC prices |
+| [`services/wallets/`](services/wallets/) | Google sign-in through Circle user-controlled wallets, so people without a wallet app can take part |
+| [`services/sponsor/`](services/sponsor/) | Gas sponsor: deploys smart wallets from their signatures and covers gas for the party who must act, after checking the call on-chain |
+| [`services/keeper/`](services/keeper/) | Pays out finished deals, refunds buyers when a plug misses the 7-day deadline, retries parked payouts, alerts on solvency and owner actions |
+| [`packages/shared/`](packages/shared/) | ABI, chain config, EIP-712 types and funding rules shared by the app and services |
+| [`packages/testkit/`](packages/testkit/) | Test helpers: local chain, contract deployment, an RPC proxy that behaves like Arc |
+
+Key design choices, in short: the plug can only choose between two fixed destinations, so a referee can never become a custodian; deal terms are signed EIP-712 data carried in the link, so there is no server database of deals; and a silent plug defaults to a refund, so the worst case for a buyer is waiting 7 days. The full trust model and threat analysis is in [contracts/SECURITY.md](contracts/SECURITY.md).
+
+## Testing
+
+Every push runs a local gate ([`scripts/hooks/pre-push`](scripts/hooks/pre-push)): `forge fmt --check`, the Foundry unit, fuzz and invariant suites, Slither (fails on any medium or high finding), the Arc fork tests, and typecheck plus tests for every TypeScript package. The contract suite includes 9 invariant tests over 10 money and state rules: the balance always covers what the contract owes, the total held is exact, payout legs sum to what was escrowed, and the parties fixed at funding never change ([SECURITY.md](contracts/SECURITY.md#test-evidence)). GitHub Actions runs the contract build and tests on pushes to `main` ([`contracts.yml`](.github/workflows/contracts.yml)).
 
 ```sh
-git submodule update --init --recursive
-pnpm install
-pnpm build && pnpm test          # TypeScript packages and the web app
-pnpm --filter @plug360/web dev   # the deal room on http://localhost:3000
-cd contracts && make test        # contracts: unit, fuzz and invariant tests
-cd contracts && make hooks       # commit and push gates
+cd contracts && make test           # unit, fuzz and invariant tests
+pnpm -r typecheck && pnpm -r test   # TypeScript packages and the web app
 ```
 
-See [contracts/README.md](contracts/README.md), [contracts/SECURITY.md](contracts/SECURITY.md) and [contracts/OPERATIONS.md](contracts/OPERATIONS.md).
+## Quickstart
+
+Requires Node 22+, pnpm and [Foundry](https://getfoundry.sh).
+
+```sh
+git clone https://github.com/Majormaxx/plug360 && cd plug360
+git submodule update --init --recursive
+pnpm install
+pnpm build
+cp apps/web/.env.example apps/web/.env.local   # defaults to Arc testnet
+pnpm --filter @plug360/web dev                  # http://localhost:3000
+```
+
+The app runs on Arc testnet with no configuration. Google sign-in, gas sponsorship and the keeper need the optional values described in [`apps/web/.env.example`](apps/web/.env.example) and [`services/keeper/.env.example`](services/keeper/.env.example). Get test USDC from [faucet.circle.com](https://faucet.circle.com).
+
+## Operations
+
+Keys, deployment steps, owner actions, monitoring and incident playbooks: [contracts/OPERATIONS.md](contracts/OPERATIONS.md).
 
 ## License
 
