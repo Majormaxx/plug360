@@ -10,6 +10,7 @@ const schema = z.object({
   walletId: z.string(),
   address: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
   email: z.string().optional(),
+  name: z.string().optional(),
 });
 export type CircleSession = z.infer<typeof schema>;
 
@@ -39,4 +40,12 @@ export function saveSession(s: CircleSession | undefined): void {
 export function onSessionChange(fn: () => void): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);
+}
+
+/** What the header calls a signed-in person: first name from Google, else the part of the email before @. */
+export function displayName(s: Pick<CircleSession, 'name' | 'email'> | undefined): string | undefined {
+  const first = s?.name?.trim().split(/\s+/)[0];
+  if (first) return first;
+  const local = s?.email?.split('@')[0]?.trim();
+  return local || undefined;
 }

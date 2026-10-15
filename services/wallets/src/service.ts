@@ -20,7 +20,7 @@ export type CircleClient = {
     refId?: string;
     idempotencyKey?: string;
   }): Promise<{ data?: { challengeId?: string } }>;
-  listTransactions(i: { userToken: string; walletIds?: string[] }): Promise<{ data?: { transactions?: Array<{ refId?: string; state?: string; txHash?: string; errorReason?: string }> } }>;
+  listTransactions(i: { userToken: string; walletIds?: string[] }): Promise<{ data?: { transactions?: Array<{ refId?: string; state?: string; txHash?: string; errorReason?: string; operation?: string; createDate?: string }> } }>;
 };
 
 export class WalletsError extends Error {
@@ -134,6 +134,10 @@ export async function runOp<O extends Op>(
         const { walletId, refId } = input as OpInput<'transaction'>;
         const list = (await client.listTransactions({ userToken: token, walletIds: [walletId] })).data?.transactions ?? [];
         const t = list.find((x) => x.refId === refId);
+        // Diagnostics for the live path: what Circle returned for this wallet. IDs and states only, no secrets.
+        if (!t || !t.txHash) {
+          console.info('[wallets] transaction lookup', JSON.stringify({ refId, found: !!t, state: t?.state, total: list.length, recent: list.slice(0, 3).map((x) => ({ refId: x.refId, state: x.state, hash: !!x.txHash, op: x.operation, at: x.createDate })) }));
+        }
         if (!t) return { state: 'NOT_FOUND' } as OpOutput[O];
         return { state: need(t.state, 'transaction state'), ...(t.txHash ? { txHash: t.txHash } : {}), ...(t.errorReason ? { errorReason: t.errorReason } : {}) } as OpOutput[O];
       }

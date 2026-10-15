@@ -22,7 +22,7 @@ import { CIRCLE_CONNECTOR_ID } from '@/lib/circle/connector';
 import { circleEnabled } from '@/lib/circle/config';
 import { activate, loginErrorMessage } from '@/lib/circle/login';
 import { warmCircle } from '@/lib/circle/sdk';
-import { loadSession } from '@/lib/circle/session';
+import { displayName, loadSession, onSessionChange } from '@/lib/circle/session';
 import { CircleSignIn } from './CircleSignIn';
 
 /** Wallets announced through EIP-6963 replace the generic injected entry, so each shows once by name. */
@@ -37,16 +37,41 @@ export function ConnectButton({ size = 'sm', label }: { size?: 'sm' | 'md' | 'lg
   label ??= circleEnabled ? 'Sign in' : size === 'sm' ? 'Connect' : 'Connect wallet';
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const { address, status } = useAccount();
+  const { address, status, connector } = useAccount();
   useEffect(() => setMounted(true), []);
+  // Google sign-ins show the person's first name; the address lives in the account sheet.
+  const [person, setPerson] = useState<{ name: string; initial: string }>();
+  useEffect(() => {
+    const read = () => {
+      const s = loadSession();
+      const name = connector?.id === CIRCLE_CONNECTOR_ID && s && address && s.address.toLowerCase() === address.toLowerCase() ? displayName(s) : undefined;
+      setPerson(name ? { name, initial: name[0]!.toUpperCase() } : undefined);
+    };
+    read();
+    return onSessionChange(read);
+  }, [address, connector]);
 
   if (!mounted || status === 'reconnecting') return <Skeleton className="h-9 w-28 rounded-full" />;
 
   return (
     <>
       {address ? (
-        <Button variant="soft" size={size} onClick={() => setOpen(true)} icon={<span className="size-2 rounded-full bg-mint" />}>
-          <span className="tabular">{shortAddress(address)}</span>
+        <Button
+          variant="soft"
+          size={size}
+          onClick={() => setOpen(true)}
+          aria-label={person ? `${person.name}, account ${shortAddress(address)}` : undefined}
+          icon={
+            person ? (
+              <span aria-hidden className="grid size-6 place-items-center rounded-full bg-accent text-xs font-semibold text-accent-ink">
+                {person.initial}
+              </span>
+            ) : (
+              <span className="size-2 rounded-full bg-mint" />
+            )
+          }
+        >
+          {person ? <span className="max-w-[10rem] truncate">{person.name}</span> : <span className="tabular">{shortAddress(address)}</span>}
         </Button>
       ) : (
         <Button

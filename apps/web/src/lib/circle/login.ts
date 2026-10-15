@@ -84,8 +84,8 @@ export async function resumeGoogleLogin(publicClient: PublicClient): Promise<{ s
       // ignore
     }
   });
-  const email = 'oAuthInfo' in result ? result.oAuthInfo.socialUserInfo?.email : undefined;
-  const session = await completeLogin(result, publicClient, walletsApi, email);
+  const info = 'oAuthInfo' in result ? result.oAuthInfo.socialUserInfo : undefined;
+  const session = await completeLogin(result, publicClient, walletsApi, info?.email, info?.name);
   return { session, ...(pending.returnTo ? { returnTo: pending.returnTo } : {}) };
 }
 
@@ -99,6 +99,7 @@ export async function completeLogin(
   publicClient: PublicClient,
   api: WalletsApi = walletsApi,
   email?: string,
+  name?: string,
 ): Promise<CircleSession> {
   const auth = { userToken: result.userToken, encryptionKey: result.encryptionKey };
   loginStatus.set({ step: 'creating' });
@@ -112,7 +113,7 @@ export async function completeLogin(
   }
   if (!wallet) throw new Error('Circle did not create a wallet. Try signing in again.');
 
-  const session: CircleSession = { ...auth, walletId: wallet.id, address: wallet.address, ...(email ? { email } : {}) };
+  const session: CircleSession = { ...auth, walletId: wallet.id, address: wallet.address, ...(email ? { email } : {}), ...(name ? { name } : {}) };
   saveSession(session);
   await activate(session, publicClient, api);
   loginStatus.set({ step: 'done' });
