@@ -67,7 +67,10 @@ export function ConnectButton({ size = 'sm', label }: { size?: 'sm' | 'md' | 'lg
 }
 
 function ConnectPanel({ onDone }: { onDone: () => void }) {
-  const { connectors, connectAsync, isPending, variables } = useConnect();
+  const { connectors, connectAsync } = useConnect();
+  // Which wallet we are waiting on. Kept apart from wagmi's isPending so a wallet that never answers
+  // (locked, or Talisman before its setup is finished) cannot lock every other button.
+  const [waiting, setWaiting] = useState<string>();
   const list = visibleConnectors(connectors);
   const hasInjected = typeof window !== 'undefined' && 'ethereum' in window;
   const here = typeof window !== 'undefined' ? window.location.href.replace(/^https?:\/\//, '') : '';
@@ -95,15 +98,25 @@ function ConnectPanel({ onDone }: { onDone: () => void }) {
             <li key={c.uid}>
               <button
                 type="button"
-                disabled={isPending}
                 onClick={async () => {
+                  const name = c.id === 'injected' ? 'Your wallet' : c.name;
+                  setWaiting(c.uid);
+                  const nudge = setTimeout(() => {
+                    setWaiting((w) => (w === c.uid ? undefined : w));
+                    toast(`${name} didn't respond.`, { description: 'Open it from your browser toolbar to unlock it or finish setting it up, then try again. Or pick another wallet.' });
+                  }, 20_000);
                   try {
                     await connectAsync({ connector: c, chainId: network.chain.id });
                     onDone();
                   } catch (err) {
+                    const code = (err as { code?: number; cause?: { code?: number } }).code ?? (err as { cause?: { code?: number } }).cause?.code;
                     const f = toFriendlyError(err);
-                    if (f.kind === 'cancelled') toast('Connection cancelled.');
+                    if (code === -32002) toast.error(`${name} already has a request open.`, { description: 'Click its icon in your browser toolbar to finish or reject it, then try again.' });
+                    else if (f.kind === 'cancelled') toast('Connection cancelled.');
                     else toast.error("Couldn't connect.", { description: f.detail ?? f.title });
+                  } finally {
+                    clearTimeout(nudge);
+                    setWaiting((w) => (w === c.uid ? undefined : w));
                   }
                 }}
                 className="press flex w-full items-center gap-3 rounded-[16px] border border-line bg-bg px-4 py-3.5 text-left transition-colors hover:border-line-strong disabled:opacity-60"
@@ -117,7 +130,7 @@ function ConnectPanel({ onDone }: { onDone: () => void }) {
                   </span>
                 )}
                 <span className="flex-1 font-medium">{c.id === 'injected' ? 'Browser wallet' : c.name}</span>
-                {isPending && variables?.connector === c && <span className="text-sm text-muted">Check your wallet</span>}
+                {waiting === c.uid && <span className="text-sm text-muted">Check your wallet</span>}
               </button>
             </li>
           ))}
