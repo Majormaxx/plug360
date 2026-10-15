@@ -4,7 +4,12 @@
 
 Plug360 is USDC escrow on Arc for small deals between people who know each other, with a mutual friend (the "plug") as referee. Informal deals today run on trust, so one side pays first and hopes; Plug360 locks the buyer's USDC in a contract until the job is done, and the plug can settle a dispute only by refunding the buyer or paying the seller, never by taking the money.
 
-**Live app:** [plug360.xyz](https://plug360.xyz)
+| | |
+|---|---|
+| App | [plug360.xyz](https://plug360.xyz) |
+| Mainnet contract | [`0xd173909Bc98DAf021669c56e5613Cd531903B0de`](https://explorer.arc.io/address/0xd173909Bc98DAf021669c56e5613Cd531903B0de) (verified) |
+| Security model | [contracts/SECURITY.md](contracts/SECURITY.md) |
+| Operations | [contracts/OPERATIONS.md](contracts/OPERATIONS.md) |
 
 ## How a deal works
 
@@ -14,6 +19,20 @@ Plug360 is USDC escrow on Arc for small deals between people who know each other
 4. The buyer releases the money, or opens a dispute before the money-back window closes. The plug rules within 7 days; if they stay silent, anyone can trigger a full refund.
 
 Platform fee is zero. The plug fee is set per deal, capped at 5% of the price and split evenly between buyer and seller.
+
+## Built on Circle
+
+Plug360 is built on Circle's stack end to end: the money is USDC, the settlement layer is Arc, and people who have never used crypto get a Circle wallet from a Google sign-in. A buyer in Lagos can pay a seller they know without installing a wallet app, buying a separate gas token, or writing down a seed phrase.
+
+| Circle product | How Plug360 uses it | Status |
+|---|---|---|
+| [Arc](https://www.arc.network) | Settlement layer for every deal. Gas is paid in USDC, so a deal needs no second token | Mainnet and testnet |
+| [USDC](https://www.circle.com/usdc) (native on Arc) | The only asset the escrow holds. Prices, plug fees, refunds and payouts are all USDC | Mainnet and testnet |
+| [User-Controlled Wallets](https://developers.circle.com/wallets/user-controlled) | Google sign-in creates a smart contract wallet per person (`@circle-fin/w3s-pw-web-sdk` in the app, `@circle-fin/user-controlled-wallets` on the server). Plug360 holds the API key but cannot move funds: every signature and payment is approved by the person with their PIN in Circle's window | Testnet; mainnet once Circle mainnet access is enabled |
+| [Gas Station](https://developers.circle.com/wallets/gas-station) | Pays network fees for those smart wallets, including their one-time activation | Testnet |
+| [Faucet](https://faucet.circle.com) | Test USDC for trying Plug360 on Arc testnet | Testnet |
+
+People who bring their own wallet (MetaMask, Rabby and others) are covered by Plug360's own gas sponsor ([`services/sponsor`](services/sponsor/)), which tops up gas only for calls the contract would accept.
 
 ## Status and audit
 
