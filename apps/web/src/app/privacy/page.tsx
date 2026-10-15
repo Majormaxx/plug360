@@ -53,7 +53,7 @@ export default function PrivacyPage() {
                 <strong>When you use a deal.</strong> Each deal is recorded on the Arc blockchain: the buyer, seller and plug wallet addresses, the price, the plug fee, the deadlines, a fingerprint (hash) of the job description, and every payment, dispute and payout. We do not run this record and cannot change or delete it.
               </p>
               <p>
-                <strong>The job description itself</strong> travels inside the deal link, after the <code className="font-mono text-[13px] text-ink">#</code>. Browsers never send that part of a link to a server, so it reaches only the people you share the link with.
+                <strong>The job description itself</strong> travels inside the deal link, after the <code className="font-mono text-[13px] text-ink">#</code>. Browsers never send that part of a link to a server, so it reaches only the people you share the link with. If you invite your plug by email, the link carries a one-way fingerprint of their email, never the email itself.
               </p>
               <p>
                 <strong>Technical data.</strong> Our hosting provider receives your IP address and browser details with every request, as any website does. We use your IP address for a few minutes at a time to limit how often sign-in and gas requests can be made. We do not keep it.

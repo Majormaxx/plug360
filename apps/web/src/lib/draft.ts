@@ -14,7 +14,16 @@ export type Draft = {
   job: Job;
   sellerSig?: Hex;
   plugSig?: Hex;
+  /**
+   * Who the seller invited to the open plug seat: a hash of their Google email (never the email itself,
+   * so the buyer and anyone else holding the link cannot read it) and the name the seller typed. This is
+   * an off-chain gate in the app; the contract only knows addresses and the seller still confirms the plug.
+   */
+  invite?: PlugInvite;
 };
+
+export type PlugInvite = { emailHash: Hex; name?: string };
+export const INVITE_NAME_MAX = 40;
 
 /** What the deal is for. Hashed into terms.metadataHash, so editing it after signing breaks the signatures. */
 export type Job = { title: string; note: string };
@@ -44,6 +53,7 @@ const wireSchema = z.object({
   j: z.object({ t: z.string().max(TITLE_MAX), n: z.string().max(NOTE_MAX) }),
   ss: signature.optional(),
   ps: signature.optional(),
+  pi: z.object({ h: hex32, n: z.string().max(INVITE_NAME_MAX).optional() }).optional(),
 });
 type Wire = z.infer<typeof wireSchema>;
 
@@ -116,6 +126,7 @@ export function encodeDraft(d: Draft): string {
     j: { t: d.job.title, n: d.job.note },
     ...(d.sellerSig ? { ss: d.sellerSig } : {}),
     ...(d.plugSig ? { ps: d.plugSig } : {}),
+    ...(d.invite ? { pi: { h: d.invite.emailHash, ...(d.invite.name ? { n: d.invite.name } : {}) } } : {}),
   };
   return toBase64Url(JSON.stringify(wire));
 }
@@ -153,7 +164,19 @@ export function decodeDraft(fragment: string, expect: { chainId: number; escrow:
     job,
     ...(wire.ss ? { sellerSig: wire.ss as Hex } : {}),
     ...(wire.ps ? { plugSig: wire.ps as Hex } : {}),
+    ...(wire.pi ? { invite: { emailHash: wire.pi.h as Hex, ...(wire.pi.n ? { name: wire.pi.n } : {}) } } : {}),
   };
+}
+
+/** Hash used to reserve a plug seat for an email. Case and surrounding spaces do not matter. */
+export function emailHash(email: string): Hex {
+  return keccak256(stringToBytes(`plug360:plug-email:${email.trim().toLowerCase()}`));
+}
+
+/** True when there is no invite, or the signed-in email is the one the seller invited. */
+export function inviteAllows(d: Pick<Draft, 'invite'>, email: string | undefined): boolean {
+  if (!d.invite) return true;
+  return !!email && emailHash(email) === d.invite.emailHash;
 }
 
 /**

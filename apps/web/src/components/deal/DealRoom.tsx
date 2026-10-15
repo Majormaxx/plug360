@@ -12,7 +12,8 @@ import { useDeal, usePlugLevel } from '@/hooks/useEscrow';
 import { useHashState } from '@/hooks/useDraftHash';
 import { useNow } from '@/hooks/useNow';
 import { escrowDomain, network } from '@/lib/config';
-import { claimSeat, decodeDraft, DraftError, encodeDraft, isOpenSeat, reopenSeat, type Draft } from '@/lib/draft';
+import { claimSeat, decodeDraft, DraftError, encodeDraft, inviteAllows, isOpenSeat, reopenSeat, type Draft, type PlugInvite } from '@/lib/draft';
+import { useSignedInEmail } from '@/hooks/useSignedInEmail';
 import { nextActor, type SigState } from '@/lib/dealRoom';
 import { signerReadiness } from '@/lib/signers';
 import { toFriendlyError } from '@/lib/errors';
@@ -238,10 +239,18 @@ function Room({ draft, onUpdate }: { draft: Draft; onUpdate: (d: Draft) => void 
             </div>
           ) : open ? (
             role === 'seller' ? (
-              <WaitStep text="Send this link to your plug. They add their wallet and accept, then it comes back to you to sign." link={link} />
+              <WaitStep
+                text={
+                  draft.invite
+                    ? `Send this link to ${draft.invite.name ?? 'your plug'}. They sign in with the Google email you entered and accept, then it comes back to you to sign.`
+                    : 'Send this link to your plug. They add their wallet and accept, then it comes back to you to sign.'
+                }
+                link={link}
+              />
             ) : (
               <ClaimStep
                 account={address}
+                {...(draft.invite ? { invite: draft.invite } : {})}
                 price={terms.price}
                 loading={signing}
                 disabled={expired}
@@ -255,7 +264,9 @@ function Room({ draft, onUpdate }: { draft: Draft; onUpdate: (d: Draft) => void 
               <div className="space-y-4">
                 <div className="space-y-2">
                   <p className="font-display text-lg font-semibold tracking-tight">Check your plug, then sign</p>
-                  <p className="text-sm text-muted">Someone took the plug seat and accepted. Only sign if this is your plug&apos;s wallet.</p>
+                  <p className="text-sm text-muted">
+                    {draft.invite ? `${draft.invite.name ?? 'Your invited plug'} signed in with the email you entered and accepted.` : 'Someone took the plug seat and accepted.'} Only sign if this is your plug&apos;s wallet.
+                  </p>
                   <div className="rounded-[14px] bg-bg p-3.5">
                     <AddressText address={terms.plug} compact />
                     <div className="mt-2">
@@ -359,8 +370,22 @@ function ActionStep({ title, body, cta, onClick, loading, disabled }: { title: s
   );
 }
 
-function ClaimStep({ account, price, loading, disabled, onClaim }: { account: Address; price: bigint; loading: boolean; disabled: boolean; onClaim: () => void }) {
+function ClaimStep({ account, invite, price, loading, disabled, onClaim }: { account: Address; invite?: PlugInvite; price: bigint; loading: boolean; disabled: boolean; onClaim: () => void }) {
   const { level, cap, isLoading } = usePlugLevel(account);
+  const email = useSignedInEmail(account);
+  if (invite && !inviteAllows({ invite }, email)) {
+    const who = invite.name ?? 'the plug the seller invited';
+    return (
+      <div className="space-y-3">
+        <p className="font-display text-lg font-semibold tracking-tight">This seat is for {who}</p>
+        <Notice tone="warn" title={email ? `You're signed in as ${email}` : 'Sign in with Google to take this seat'}>
+          {email
+            ? 'The seller invited a different email. If you are the plug, sign out and sign in with the Google account they invited.'
+            : 'The seller reserved this seat for a Google account. Sign out of this wallet, then sign in with Google using the email you were invited with.'}
+        </Notice>
+      </div>
+    );
+  }
   if (isLoading || level === undefined) return <Skeleton className="h-32" />;
   if (level === 0) {
     return (

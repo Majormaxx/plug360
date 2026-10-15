@@ -9,10 +9,12 @@ import { useAccount } from 'wagmi';
 import { usePlugLevel } from '@/hooks/useEscrow';
 import { network } from '@/lib/config';
 import {
+  emailHash,
   encodeDraft,
   EXPIRY_PRESETS,
   FEE_PRESETS_BPS,
   feeForBps,
+  INVITE_NAME_MAX,
   jobHash,
   newOrderId,
   NOTE_MAX,
@@ -46,6 +48,8 @@ type Form = {
   seller: string;
   plug: string;
   plugMode: PlugMode;
+  plugName: string;
+  plugEmail: string;
   feeBps: number;
   windowSeconds: number;
   expirySeconds: number;
@@ -59,12 +63,16 @@ const initial: Form = {
   seller: '',
   plug: '',
   plugMode: 'known',
+  plugName: '',
+  plugEmail: '',
   feeBps: 200,
   windowSeconds: 3 * 86_400,
   expirySeconds: 7 * 86_400,
 };
 
 type Touched = Partial<Record<keyof Form, boolean>>;
+
+const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 /** Field-level message for a contract rule, phrased for the person filling the form. */
 function messageFor(v: TermsViolation, role: Role): string | undefined {
@@ -109,6 +117,7 @@ export function DraftForm() {
     if (!form.price) e.price = 'Enter a price.';
     if (form.role === 'buyer' && !form.seller) e.seller = "Enter the seller's wallet address.";
     else if (form.role === 'buyer' && !isAddress(form.seller)) e.seller = 'That is not a valid address.';
+    if (open && form.plugEmail.trim() && !EMAIL.test(form.plugEmail.trim())) e.plugEmail = 'That is not a valid email.';
     if (!open && !form.plug) e.plug = "Choose your plug, or paste their address.";
     else if (!open && !plugAddr) e.plug = 'That is not a valid address.';
 
@@ -163,6 +172,9 @@ export function DraftForm() {
         expiry: BigInt(Math.floor(Date.now() / 1000) + form.expirySeconds),
         metadataHash: jobHash(job),
       },
+      ...(open && form.plugEmail.trim()
+        ? { invite: { emailHash: emailHash(form.plugEmail), ...(form.plugName.trim() ? { name: form.plugName.trim().slice(0, INVITE_NAME_MAX) } : {}) } }
+        : {}),
     });
     router.push(`/deal#${encoded}`);
   }
@@ -268,7 +280,7 @@ export function DraftForm() {
             label="Your plug, the person in the middle"
             hint={
               open
-                ? "Send the link to your plug. They sign in when they open it, and you check it's them before you sign."
+                ? "Send the link to your plug. Only someone signed in with the email you enter can take the seat, and you still check it's them before you sign."
                 : 'Someone you both know and trust. They only step in if there is a dispute, and they can never take the money for themselves.'
             }
           >
@@ -285,6 +297,33 @@ export function DraftForm() {
               />
             )}
           </Field>
+          {open && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Their name" hint="Shown on the deal, so everyone knows who referees.">
+                {({ id, describedBy }) => (
+                  <Input id={id} aria-describedby={describedBy} placeholder="Kemi" maxLength={INVITE_NAME_MAX} autoComplete="off" value={form.plugName} onChange={(e) => set({ plugName: e.target.value })} />
+                )}
+              </Field>
+              <Field label="Their Google email" error={show('plugEmail')} hint="Only this account can take the seat. It is hashed, so the buyer never sees it.">
+                {({ id, describedBy, invalid }) => (
+                  <Input
+                    id={id}
+                    aria-describedby={describedBy}
+                    aria-invalid={invalid}
+                    type="email"
+                    inputMode="email"
+                    placeholder="kemi@gmail.com"
+                    autoComplete="off"
+                    spellCheck={false}
+                    autoCapitalize="off"
+                    value={form.plugEmail}
+                    onChange={(e) => set({ plugEmail: e.target.value })}
+                    onBlur={() => touch('plugEmail')}
+                  />
+                )}
+              </Field>
+            </div>
+          )}
           {!open && (
             <Field label="Who's your plug?" error={show('plug')} aside={plugAddr ? <PlugCheck plug={plugAddr} /> : <QrScanButton onAddress={(a) => (set({ plug: a }), touch('plug'))} />}>
               {({ id, describedBy, invalid }) => (
