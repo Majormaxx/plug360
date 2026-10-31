@@ -7,8 +7,11 @@ import {IDealEscrowTypes} from "./IDealEscrowTypes.sol";
 /// @notice The owner can list plugs, pause new deals and sweep USDC sent here by mistake.
 ///         The owner can never move USDC that belongs to a deal.
 interface IDealEscrowAdmin is IDealEscrowTypes {
-    /// @notice Sets a plug's level (0 delists). Applies to deals funded afterwards only.
-    function setPlugLevel(address plug, uint8 level) external;
+    /// @notice Sets a plug's level (0 delists) and optionally records an IPFS CID for their profile.
+    ///         The CID string is emitted in PlugLevelSet for off-chain indexers; it is not stored on-chain.
+    ///         Pass an empty string when no profile update is needed.
+    ///         Applies to deals funded afterwards only.
+    function setPlugLevel(address plug, uint8 level, string calldata profileCid) external;
 
     /// @notice Blocks new deals. Every exit path stays open while paused.
     function pause() external;

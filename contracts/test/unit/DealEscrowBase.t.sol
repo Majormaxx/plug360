@@ -37,7 +37,7 @@ abstract contract DealEscrowBase is Test {
         usdc = new MockUSDC();
         escrow = new DealEscrow(IERC20(address(usdc)), owner);
         vm.prank(owner);
-        escrow.setPlugLevel(plug, 5);
+        escrow.setPlugLevel(plug, 5, "");
 
         usdc.mint(buyer, 10_000e6);
         vm.prank(buyer);

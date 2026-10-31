@@ -10,6 +10,7 @@ import { Logo } from './Logo';
 export const NAV = [
   { href: '/new', label: 'New deal' },
   { href: '/me', label: 'My deals' },
+  { href: '/plugs', label: 'Plugs' },
   { href: '/add-usdc', label: 'Add USDC' },
 ] as const;
 

@@ -221,11 +221,11 @@ contract DealEscrow is IDealEscrow, EIP712, Ownable2Step, Pausable, ReentrancyGu
     // ---------------------------------------------------------------- owner
 
     /// @inheritdoc IDealEscrowAdmin
-    function setPlugLevel(address plug, uint8 level) external onlyOwner {
+    function setPlugLevel(address plug, uint8 level, string calldata profileCid) external onlyOwner {
         if (plug == address(0)) revert ZeroAddress();
         if (level > MAX_LEVEL) revert InvalidLevel();
         plugLevel[plug] = level;
-        emit PlugLevelSet(plug, level);
+        emit PlugLevelSet(plug, level, profileCid);
     }
 
     /// @inheritdoc IDealEscrowAdmin

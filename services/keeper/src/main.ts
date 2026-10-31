@@ -35,7 +35,8 @@ export async function main(argv: string[], io: MainIo): Promise<number> {
     throw err;
   }
 
-  const keeper = createKeeper(config, io.deps);
+  const statsPort = io.env['KEEPER_STATS_PORT'] ? Number(io.env['KEEPER_STATS_PORT']) : 0;
+  const keeper = createKeeper(config, { ...io.deps, statsPort });
   if (flags.includes('--once')) {
     const report = await keeper.tick();
     return report.ok ? 0 : 1;

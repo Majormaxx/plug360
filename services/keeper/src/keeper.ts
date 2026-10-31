@@ -4,6 +4,8 @@ import { arcChainById, dealEscrowAbi, DealStatus, MAX_LOG_BLOCKS, PLUG_WINDOW_SE
 import { AlertSink, type Alert, type FetchLike } from './alerts.js';
 import type { KeeperConfig } from './config.js';
 import { jsonLogger, type Logger } from './log.js';
+import { updatePlugStatsFromEvents, finalisePlugStats, type RawEvent, type DisputeTimestamps } from './plug-stats.js';
+import { createStatsServer, type StatsStore } from './stats-server.js';
 import { isRangeLimit, RpcPool, type RpcPoolOptions } from './rpc.js';
 import { TxSender, type ActionResult } from './sender.js';
 import { FileStateStore, loadOrInit, pendingKey, type KeeperState, type StateStore } from './state.js';
@@ -16,6 +18,8 @@ export type KeeperDeps = {
   receiptPollMs?: number;
   /** Overrides for RPC retry timing. */
   rpc?: Pick<RpcPoolOptions, 'maxAttempts' | 'baseDelayMs' | 'maxDelayMs' | 'requestTimeoutMs'>;
+  /** Port for the plug-stats HTTP server. 0 = disabled (default). Pass KEEPER_STATS_PORT env. */
+  statsPort?: number;
 };
 
 export type TickReport = {
@@ -86,6 +90,20 @@ export function createKeeper(config: KeeperConfig, deps: KeeperDeps = {}) {
   const escrow = config.escrow;
   let running = false;
 
+  // Plug reputation stats: accumulated from event history, rebuilt each restart.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const plugWork: Map<string, any> = new Map();
+  // disputeTimestamps owned here (not in the module) so each keeper instance is isolated.
+  const disputeTimestamps: DisputeTimestamps = new Map();
+  // dealToPlug maps dealId → plug address (for attributing DisputeOpened to the right plug).
+  const dealToPlug: Map<string, string> = new Map();
+  const statsStore: StatsStore = { plugStats: new Map(), plugCids: new Map() };
+
+  // Start the HTTP stats server if a port was requested.
+  if (deps.statsPort && deps.statsPort > 0) {
+    createStatsServer(statsStore, deps.statsPort);
+  }
+
   const readEscrow = <T>(label: string, functionName: string, args: readonly unknown[], blockNumber?: bigint) =>
     pool.call(label, (c) =>
       c.readContract({ address: escrow, abi: dealEscrowAbi, functionName, args, blockNumber } as never),
@@ -153,6 +171,39 @@ export function createKeeper(config: KeeperConfig, deps: KeeperDeps = {}) {
         span = span * 2n > maxSpan ? maxSpan : span * 2n;
         accepted = 0;
       }
+      // Feed events to the plug-stats aggregator (block timestamps resolved lazily below).
+      const blockTsCache = new Map<bigint, number>();
+      const rawEvents: RawEvent[] = events.map((ev) => ({
+        eventName: ev.eventName,
+        blockNumber: ev.blockNumber,
+        transactionHash: ev.transactionHash ?? '',
+        args: ev.args as Record<string, unknown>,
+        timestamp: undefined,
+      }));
+      // Fetch block timestamps for blocks referenced by reputation-relevant events.
+      const repEvents = new Set(['DealFunded', 'DisputeOpened', 'PlugRuled']);
+      const blocksToFetch = new Set(events.filter((e) => repEvents.has(e.eventName)).map((e) => e.blockNumber));
+      await Promise.all(Array.from(blocksToFetch).map(async (bn) => {
+        try {
+          const blk = await pool.call('block-ts', (c) => c.getBlock({ blockNumber: bn }));
+          blockTsCache.set(bn, Number(blk.timestamp));
+        } catch {
+          // best-effort; missing timestamp means the event gets ts=0
+        }
+      }));
+      for (const re of rawEvents) re.timestamp = blockTsCache.get(re.blockNumber);
+      updatePlugStatsFromEvents(plugWork, rawEvents, blockTsCache, disputeTimestamps, dealToPlug);
+
+      // Extract IPFS profile CIDs from PlugLevelSet events.
+      for (const ev of events) {
+        if (ev.eventName === 'PlugLevelSet') {
+          const args = ev.args as Record<string, unknown>;
+          const plug = String(args.plug ?? '').toLowerCase();
+          const cid = String(args.profileCid ?? '').trim();
+          if (plug && cid) statsStore.plugCids.set(plug, cid);
+        }
+      }
+
       const touched = new Set<bigint>();
       for (const ev of events) {
         const args = ev.args as Record<string, unknown>;
@@ -331,6 +382,10 @@ export function createKeeper(config: KeeperConfig, deps: KeeperDeps = {}) {
       }
       state.flags.lowSponsor = low;
     }
+
+    // Update plug reputation stats from the full accumulated event history.
+    const freshStats = finalisePlugStats(plugWork, now);
+    for (const [key, stats] of freshStats.entries()) statsStore.plugStats.set(key, stats);
 
     for (const [id, d] of Object.entries(state.deals)) {
       if (d.status !== DealStatus.Disputed || d.deadlineWarned) continue;

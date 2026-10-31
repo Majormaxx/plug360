@@ -761,6 +761,11 @@ export const dealEscrowAbi = [
         "name": "level",
         "type": "uint8",
         "internalType": "uint8"
+      },
+      {
+        "name": "profileCid",
+        "type": "string",
+        "internalType": "string"
       }
     ],
     "outputs": [],
@@ -1212,6 +1217,12 @@ export const dealEscrowAbi = [
         "type": "uint8",
         "indexed": false,
         "internalType": "uint8"
+      },
+      {
+        "name": "profileCid",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
       }
     ],
     "anonymous": false

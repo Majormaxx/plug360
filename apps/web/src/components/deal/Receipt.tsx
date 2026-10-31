@@ -29,6 +29,7 @@ import { Skeleton } from '../ui/Skeleton';
 import { ConnectButton } from '../wallet/ConnectButton';
 import { StatusBadge } from './StatusBadge';
 import { TxStatus } from './TxStatus';
+import { DealClosureModal } from './DealClosureModal';
 
 type ActionSpec = {
   label: string;
@@ -218,6 +219,18 @@ export function Receipt({ id }: { id: bigint }) {
           <CopyButton value={typeof window !== 'undefined' ? window.location.href : ''} label="Copy receipt link" />
         </div>
       </aside>
+
+      {/* Deal closure modal — fires once for the buyer after settled or refunded */}
+      {role === 'buyer' && (view.phase === 'settled' || view.phase === 'refunded') && (
+        <DealClosureModal
+          dealIdHex={idHex}
+          title={title ?? 'Untitled deal'}
+          price={deal.price}
+          phase={view.phase}
+          wasDisputed={deal.disputedAt > 0}
+          plugAddress={deal.plug}
+        />
+      )}
     </div>
   );
 }

@@ -8,19 +8,20 @@ import {DealEscrow} from "../src/DealEscrow.sol";
 /// @notice Owner operations. When the owner is an EOA, broadcast with the owner key. When the owner is a
 ///         Safe, run without --broadcast and paste the printed calldata into the Safe transaction builder.
 ///         Env: ESCROW. Examples:
-///           forge script script/Admin.s.sol --sig "setPlugLevel(address,uint8)" 0xPLUG 1 --rpc-url arc_testnet
+///           forge script script/Admin.s.sol --sig "setPlugLevel(address,uint8,string)" 0xPLUG 1 "bafybeig..." --rpc-url arc_testnet
 ///           forge script script/Admin.s.sol --sig "pause()" --rpc-url arc_mainnet
 contract Admin is Script {
     function _escrow() internal view returns (DealEscrow) {
         return DealEscrow(vm.envAddress("ESCROW"));
     }
 
-    function setPlugLevel(address plug, uint8 level) external {
+    /// @param profileCid IPFS CID of the plug's signed profile JSON. Pass "" when no profile update.
+    function setPlugLevel(address plug, uint8 level, string calldata profileCid) external {
         DealEscrow e = _escrow();
         require(level <= e.MAX_LEVEL(), "level out of range");
-        _print("setPlugLevel", abi.encodeCall(e.setPlugLevel, (plug, level)));
+        _print("setPlugLevel", abi.encodeCall(e.setPlugLevel, (plug, level, profileCid)));
         vm.broadcast();
-        e.setPlugLevel(plug, level);
+        e.setPlugLevel(plug, level, profileCid);
         require(e.plugLevel(plug) == level, "level not set");
         console.log("plug level", plug, level);
     }

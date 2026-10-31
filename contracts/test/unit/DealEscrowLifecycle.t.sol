@@ -164,7 +164,7 @@ contract DealEscrowLifecycleTest is DealEscrowBase {
 
     function test_pay_revertsForUnlistedPlug() public {
         vm.prank(owner);
-        escrow.setPlugLevel(plug, 0);
+        escrow.setPlugLevel(plug, 0, "");
         IDealEscrowTypes.Terms memory t = _defaultTerms();
         bytes memory s = _sellerSig(t);
         bytes memory p = _plugSig(t);
@@ -175,7 +175,7 @@ contract DealEscrowLifecycleTest is DealEscrowBase {
 
     function test_pay_enforcesLevelCap() public {
         vm.prank(owner);
-        escrow.setPlugLevel(plug, 2); // cap 10 USDC
+        escrow.setPlugLevel(plug, 2, ""); // cap 10 USDC
         IDealEscrowTypes.Terms memory over = _terms(10e6 + 2, 0, 1 days);
         bytes memory s = _sellerSig(over);
         bytes memory p = _plugSig(over);
@@ -546,7 +546,7 @@ contract DealEscrowLifecycleTest is DealEscrowBase {
     function test_levelChangesDoNotTouchExistingDeals() public {
         uint256 id = _pay(_terms(50e6, 0, 1 days));
         vm.prank(owner);
-        escrow.setPlugLevel(plug, 0);
+        escrow.setPlugLevel(plug, 0, "");
         _dispute(id);
         vm.prank(plug);
         escrow.plugReject(id, bytes32(0)); // delisted plug still rules on its existing deal
@@ -759,7 +759,7 @@ contract DealEscrowLifecycleTest is DealEscrowBase {
         ReentrantToken token = new ReentrantToken();
         DealEscrow hostile = new DealEscrow(IERC20(address(token)), owner);
         vm.prank(owner);
-        hostile.setPlugLevel(plug, 5);
+        hostile.setPlugLevel(plug, 5, "");
         token.mint(buyer, 100e6);
         vm.prank(buyer);
         token.approve(address(hostile), type(uint256).max);
@@ -784,7 +784,7 @@ contract DealEscrowLifecycleTest is DealEscrowBase {
         FeeOnTransferToken token = new FeeOnTransferToken();
         DealEscrow taxed = new DealEscrow(IERC20(address(token)), owner);
         vm.prank(owner);
-        taxed.setPlugLevel(plug, 5);
+        taxed.setPlugLevel(plug, 5, "");
         token.mint(buyer, 100e6);
         vm.prank(buyer);
         token.approve(address(taxed), type(uint256).max);

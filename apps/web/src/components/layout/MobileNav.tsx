@@ -1,6 +1,6 @@
 'use client';
 
-import { House, Plus, Stack } from '@phosphor-icons/react';
+import { House, IdentificationCard, Plus, Stack } from '@phosphor-icons/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '../ui/cn';
@@ -9,6 +9,7 @@ const TABS = [
   { href: '/', label: 'Home', Icon: House, exact: true },
   { href: '/new', label: 'New deal', Icon: Plus, primary: true },
   { href: '/me', label: 'My deals', Icon: Stack },
+  { href: '/plugs', label: 'Plugs', Icon: IdentificationCard },
 ] as const;
 
 /** Thumb-reach navigation on phones. Hidden from md up, where the header nav takes over. */
@@ -16,7 +17,7 @@ export function MobileNav() {
   const path = usePathname();
   return (
     <nav aria-label="Main" className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/92 backdrop-blur-md md:hidden">
-      <ul className="mx-auto grid h-16 max-w-md grid-cols-3 items-center px-4">
+      <ul className="mx-auto grid h-16 max-w-md grid-cols-4 items-center px-4">
         {TABS.map(({ href, label, Icon, ...t }) => {
           const active = 'exact' in t ? path === href : path.startsWith(href);
           if ('primary' in t) {

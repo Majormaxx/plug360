@@ -32,6 +32,7 @@ import { ConnectButton } from '../wallet/ConnectButton';
 import { FeeBreakdown } from './FeeBreakdown';
 import { PlugCheck } from './PlugCheck';
 import { PlugPicker } from './PlugPicker';
+import { PlugCardInline } from '../reputation/PlugCardInline';
 import { QrScanButton } from './QrScan';
 import { NairaHint } from './NairaHint';
 import { rememberPlug } from '@/lib/storage';
@@ -342,6 +343,7 @@ export function DraftForm() {
                     onChange={(e) => set({ plug: e.target.value.trim() })}
                     onBlur={() => touch('plug')}
                   />
+                  {plugAddr && <PlugCardInline address={plugAddr} />}
                 </div>
               )}
             </Field>

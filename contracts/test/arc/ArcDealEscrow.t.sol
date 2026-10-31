@@ -59,7 +59,7 @@ contract ArcDealEscrowTest is Test {
         buyer = makeAddr("arc-buyer");
         escrow = new DealEscrow(USDC, owner);
         vm.prank(owner);
-        escrow.setPlugLevel(plug, 5);
+        escrow.setPlugLevel(plug, 5, "");
         vm.deal(buyer, 500 ether); // 500 USDC at 18 native decimals
     }
 

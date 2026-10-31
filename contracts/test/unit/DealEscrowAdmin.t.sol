@@ -82,16 +82,16 @@ contract DealEscrowAdminTest is Test {
     function testFuzz_setPlugLevel_ownerSetsAndEmits(uint8 level) public {
         level = uint8(bound(level, 0, 5));
         vm.expectEmit(true, false, false, true, address(escrow));
-        emit IDealEscrowTypes.PlugLevelSet(plug, level);
+        emit IDealEscrowTypes.PlugLevelSet(plug, level, "");
         vm.prank(owner);
-        escrow.setPlugLevel(plug, level);
+        escrow.setPlugLevel(plug, level, "");
         assertEq(escrow.plugLevel(plug), level);
     }
 
     function test_setPlugLevel_zeroDelists() public {
         vm.startPrank(owner);
-        escrow.setPlugLevel(plug, 3);
-        escrow.setPlugLevel(plug, 0);
+        escrow.setPlugLevel(plug, 3, "");
+        escrow.setPlugLevel(plug, 0, "");
         vm.stopPrank();
         assertEq(escrow.plugLevel(plug), 0);
     }
@@ -99,19 +99,19 @@ contract DealEscrowAdminTest is Test {
     function test_setPlugLevel_revertsForNonOwner() public {
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, stranger));
         vm.prank(stranger);
-        escrow.setPlugLevel(plug, 1);
+        escrow.setPlugLevel(plug, 1, "");
     }
 
     function test_setPlugLevel_revertsAboveMax() public {
         vm.expectRevert(IDealEscrowTypes.InvalidLevel.selector);
         vm.prank(owner);
-        escrow.setPlugLevel(plug, 6);
+        escrow.setPlugLevel(plug, 6, "");
     }
 
     function test_setPlugLevel_revertsOnZeroAddress() public {
         vm.expectRevert(IDealEscrowTypes.ZeroAddress.selector);
         vm.prank(owner);
-        escrow.setPlugLevel(address(0), 1);
+        escrow.setPlugLevel(address(0), 1, "");
     }
 
     // ------------------------------------------------------------ pause

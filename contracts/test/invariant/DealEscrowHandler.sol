@@ -52,9 +52,9 @@ contract DealEscrowHandler is Test {
             usdc.approve(address(escrow), type(uint256).max);
         }
         vm.startPrank(owner);
-        escrow.setPlugLevel(actors[0], 5);
-        escrow.setPlugLevel(actors[1], 3);
-        escrow.setPlugLevel(actors[2], 1);
+        escrow.setPlugLevel(actors[0], 5, "");
+        escrow.setPlugLevel(actors[1], 3, "");
+        escrow.setPlugLevel(actors[2], 1, "");
         vm.stopPrank();
     }
 
@@ -304,7 +304,7 @@ contract DealEscrowHandler is Test {
         address target = actors[plugSeed % 3];
         uint8 newLevel = uint8(bound(level, 0, 5));
         vm.prank(owner);
-        escrow.setPlugLevel(target, newLevel);
+        escrow.setPlugLevel(target, newLevel, "");
         _calls[keccak256("setLevel")]++;
     }
 

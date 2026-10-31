@@ -73,7 +73,9 @@ interface IDealEscrowTypes {
     event Settled(uint256 indexed dealId, uint256 toSeller, uint256 toPlug);
     event PayoutDeferred(uint256 indexed dealId, address indexed to, uint256 amount);
     event PayoutRetried(uint256 indexed dealId, address indexed to, uint256 amount);
-    event PlugLevelSet(address indexed plug, uint8 level);
+    /// @dev profileCid is the IPFS CID of the plug's signed profile document.
+    ///      An empty string means no profile update was supplied.
+    event PlugLevelSet(address indexed plug, uint8 level, string profileCid);
     event NonceCancelled(address indexed buyer, uint256 nonce);
     event ExcessSwept(address indexed to, uint256 amount);
 

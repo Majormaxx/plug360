@@ -31,6 +31,7 @@ import { ConnectButton } from '../wallet/ConnectButton';
 import { FeeBreakdown } from './FeeBreakdown';
 import { PayPanel } from './PayPanel';
 import { PlugCheck } from './PlugCheck';
+import { PlugDrawerTrigger } from '../reputation/PlugDrawer';
 
 /** Verifies on-chain-equivalently: viem's verifier covers plain keys and smart-contract wallets (ERC-1271). */
 function useSigState(publicClient: PublicClient | undefined, kind: 'terms' | 'accept', terms: Terms | undefined, sig: Hex | undefined): SigState {
@@ -191,7 +192,12 @@ function Room({ draft, onUpdate }: { draft: Draft; onUpdate: (d: Draft) => void 
               doneText="Accepted"
               waitText={open ? 'Seat open: your plug adds their wallet' : sellerSig === 'valid' ? 'Needs to accept' : 'Accepts after the seller'}
               active={nextUp === 'plug'}
-              extra={open ? undefined : <PlugCheck plug={terms.plug} />}
+              extra={open ? undefined : (
+                <div className="space-y-1.5">
+                  <PlugCheck plug={terms.plug} />
+                  <PlugDrawerTrigger address={terms.plug} />
+                </div>
+              )}
             />
             <li className={cn('flex gap-4 px-5 py-4', nextUp === 'buyer' && !funded && 'bg-accent-soft/60')}>
               <SeatNumber n={3} state={funded ? 'valid' : 'missing'} />
@@ -267,11 +273,10 @@ function Room({ draft, onUpdate }: { draft: Draft; onUpdate: (d: Draft) => void 
                   <p className="text-sm text-muted">
                     {draft.invite ? `${draft.invite.name ?? 'Your invited plug'} signed in with the email you entered and accepted.` : 'Someone took the plug seat and accepted.'} Only sign if this is your plug&apos;s wallet.
                   </p>
-                  <div className="rounded-[14px] bg-bg p-3.5">
+                  <div className="rounded-[14px] bg-bg p-3.5 space-y-2">
                     <AddressText address={terms.plug} compact />
-                    <div className="mt-2">
-                      <PlugCheck plug={terms.plug} />
-                    </div>
+                    <PlugCheck plug={terms.plug} />
+                    <PlugDrawerTrigger address={terms.plug} />
                   </div>
                 </div>
                 <Button size="lg" className="w-full" loading={signing} disabled={expired} onClick={() => sign('seller')}>
