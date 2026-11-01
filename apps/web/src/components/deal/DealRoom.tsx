@@ -116,6 +116,24 @@ function Room({ draft, onUpdate }: { draft: Draft; onUpdate: (d: Draft) => void 
   async function sign(kind: 'seller' | 'plug', base: Draft = draft) {
     try {
       if (chainId !== network.chain.id) await switchChainAsync({ chainId: network.chain.id });
+
+      // Auto-list an unlisted plug at level 1 before they sign.
+      if (kind === 'plug' && namedPlugLevel === 0 && address) {
+        toast.loading('Listing your wallet as a plug…', { id: 'list-plug' });
+        const res = await fetch('/api/escrow/list-plug', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ plug: address }),
+        });
+        toast.dismiss('list-plug');
+        if (!res.ok) {
+          const { error } = await res.json() as { error?: string };
+          toast.error('Could not list your wallet', { description: error ?? 'Try again or contact the Plug360 team.' });
+          return;
+        }
+        toast.success('Wallet listed as a plug');
+      }
+
       const typed = kind === 'seller' ? termsTypedData(escrowDomain, base.terms) : acceptTypedData(escrowDomain, base.terms);
       const signature = await signTypedDataAsync(typed as never);
       onUpdate(kind === 'seller' ? { ...base, sellerSig: signature } : { ...base, plugSig: signature });
@@ -309,15 +327,15 @@ function Room({ draft, onUpdate }: { draft: Draft; onUpdate: (d: Draft) => void 
               )
             ) : sellerSig !== 'valid' ? (
               <WaitStep text="The seller signs first. You'll get the link after that." />
-            ) : namedPlugLevel === 0 ? (
-              <PlugNotListedStep />
             ) : (
               <ActionStep
                 title="Accept as the plug"
-                body="You agree to referee if there's a dispute. If you're asked to rule, you'll have 7 days. You can refund the buyer or pay the seller, nothing else."
+                body={namedPlugLevel === 0
+                  ? "Your wallet isn't listed yet — accepting will list it and sign your acceptance in one step. You agree to referee disputes with 7 days to rule."
+                  : "You agree to referee if there's a dispute. If you're asked to rule, you'll have 7 days. You can refund the buyer or pay the seller, nothing else."}
                 cta="Accept"
                 loading={signing}
-                disabled={expired}
+                disabled={expired || plugLevelLoading}
                 onClick={() => sign('plug')}
               />
             )
@@ -487,17 +505,6 @@ function ShareRow({ link }: { link: string }) {
   );
 }
 
-function PlugNotListedStep() {
-  return (
-    <div className="space-y-3">
-      <p className="font-display text-lg font-semibold tracking-tight">You're not listed yet</p>
-      <Notice tone="warn" title="Your wallet isn't a listed plug">
-        You can accept this seat, but the deal won&apos;t fund until you&apos;re listed on the contract. Ask the seller to contact the Plug360 team to get you listed, then come back to accept.
-      </Notice>
-      <ButtonLink href="/plugs" variant="soft" className="w-full">See the plug directory</ButtonLink>
-    </div>
-  );
-}
 
 function RoomSkeleton() {
   return (
