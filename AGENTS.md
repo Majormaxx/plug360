@@ -14,7 +14,7 @@
 | Contract | Address |
 |---|---|
 | DealEscrow | `0xe2C6D195f97ae281cca31deb0e4CeB92EB56b498` | deployed 2026-11-01, tx `0x1bc91a60` |
-| PlugStake | not yet deployed |
+| PlugStake | `0x3D24B7D4867161adecF8eDaE2De0E4cCCC9f1Ed7` | deployed 2026-11-01, tx `0xf08c529f` |
 
 > Mainnet DealEscrow uses the new 3-arg `setPlugLevel(address, uint8, string)` with `PlugLevelSet(plug, level, profileCid)`. IPFS CID pipeline is live once keeper is pointed at mainnet.
 
@@ -42,7 +42,7 @@
 ## Pending (requires human action)
 
 1. List plugs on the new testnet DealEscrow via `setPlugLevel(plug, level, "")` using the owner key.
-2. Deploy PlugStake to Arc mainnet from the owner wallet (`0xEadA94f82F6b014B336ce87Cc98964c3f9A4E694`).
+2. ~~Deploy PlugStake to Arc mainnet~~ — done at `0x3D24B7D4867161adecF8eDaE2De0E4cCCC9f1Ed7`.
 3. Set `KEEPER_STATS_URL` in web env once keeper is deployed.
 4. Point `CID_STORE_PATH` and `REVIEWS_DB_PATH` to persistent storage before production.
 5. Move DealEscrow owner to a 2-of-3 Safe (M-02 from security review).
