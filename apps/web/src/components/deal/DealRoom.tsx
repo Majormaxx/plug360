@@ -107,6 +107,12 @@ function Room({ draft, onUpdate }: { draft: Draft; onUpdate: (d: Draft) => void 
         ? 'plug'
         : 'buyer';
 
+  const link = typeof window !== 'undefined' ? window.location.href : '';
+  const open = isOpenSeat(draft);
+
+  // Check whether the named plug is listed — if not, pay() will revert with PlugNotListed.
+  const { level: namedPlugLevel, isLoading: plugLevelLoading } = usePlugLevel(open ? '' : terms.plug);
+
   async function sign(kind: 'seller' | 'plug', base: Draft = draft) {
     try {
       if (chainId !== network.chain.id) await switchChainAsync({ chainId: network.chain.id });
@@ -121,8 +127,6 @@ function Room({ draft, onUpdate }: { draft: Draft; onUpdate: (d: Draft) => void 
     }
   }
 
-  const link = typeof window !== 'undefined' ? window.location.href : '';
-  const open = isOpenSeat(draft);
   const next = nextActor(open, sellerSig, plugSig);
   const nextUp = next === 'claim' ? 'plug' : next;
   const plugFirst = plugSig === 'valid' && sellerSig !== 'valid';
@@ -305,6 +309,8 @@ function Room({ draft, onUpdate }: { draft: Draft; onUpdate: (d: Draft) => void 
               )
             ) : sellerSig !== 'valid' ? (
               <WaitStep text="The seller signs first. You'll get the link after that." />
+            ) : namedPlugLevel === 0 ? (
+              <PlugNotListedStep />
             ) : (
               <ActionStep
                 title="Accept as the plug"
@@ -320,6 +326,10 @@ function Room({ draft, onUpdate }: { draft: Draft; onUpdate: (d: Draft) => void 
           ) : unusable ? (
             <Notice tone="warn" title={`The ${readiness.data?.seller === 'unusable' ? 'seller' : 'plug'} needs to sign again`}>
               Their wallet signed in a way the escrow can&apos;t check. Ask them to open the link and sign once more; it takes a few seconds.
+            </Notice>
+          ) : namedPlugLevel === 0 && !plugLevelLoading ? (
+            <Notice tone="warn" title="This plug isn't listed yet">
+              The deal can&apos;t be funded until the plug is listed on the contract. Ask the seller to choose a listed plug or contact the Plug360 team to list this one.
             </Notice>
           ) : (
             <PayPanel draft={draft} dealId={dealId} disabled={expired || sellerSig !== 'valid' || plugSig !== 'valid' || readiness.isLoading} />
@@ -473,6 +483,18 @@ function ShareRow({ link }: { link: string }) {
       <PaperPlaneTilt className="size-4 shrink-0" />
       <span className="min-w-0 flex-1">Everyone uses this same link. It updates as people sign.</span>
       <CopyButton value={link} label="Copy deal link" />
+    </div>
+  );
+}
+
+function PlugNotListedStep() {
+  return (
+    <div className="space-y-3">
+      <p className="font-display text-lg font-semibold tracking-tight">You're not listed yet</p>
+      <Notice tone="warn" title="Your wallet isn't a listed plug">
+        You can accept this seat, but the deal won&apos;t fund until you&apos;re listed on the contract. Ask the seller to contact the Plug360 team to get you listed, then come back to accept.
+      </Notice>
+      <ButtonLink href="/plugs" variant="soft" className="w-full">See the plug directory</ButtonLink>
     </div>
   );
 }
